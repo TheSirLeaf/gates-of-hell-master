@@ -1,0 +1,92 @@
+@page "/login"
+@layout EmptyLayout
+
+<PageTitle>Mestre — Gates of Hell</PageTitle>
+
+<div class="login-screen">
+    <section class="login-hero">
+        <div class="login-hero__glow"></div>
+
+        <svg class="gate" viewBox="0 0 720 900" fill="none" aria-hidden="true">
+            <defs>
+                <linearGradient id="gateStrokeMaster" x1="360" y1="180" x2="360" y2="900" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#e2542c" stop-opacity=".85" />
+                    <stop offset=".55" stop-color="#d3ad68" stop-opacity=".4" />
+                    <stop offset="1" stop-color="#d3ad68" stop-opacity="0" />
+                </linearGradient>
+                <radialGradient id="gateGlowMaster" cx="0" cy="0" r="1" gradientTransform="translate(360 430) rotate(90) scale(330 270)" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#d3ad68" stop-opacity=".2" />
+                    <stop offset="1" stop-color="#d3ad68" stop-opacity="0" />
+                </radialGradient>
+                <filter id="gateBlurMaster" x="-40%" y="-40%" width="180%" height="180%">
+                    <feGaussianBlur stdDeviation="26" />
+                </filter>
+            </defs>
+
+            <ellipse cx="360" cy="430" rx="270" ry="330" fill="url(#gateGlowMaster)" filter="url(#gateBlurMaster)" />
+            <path d="M138 860V430a222 222 0 0 1 444 0v430" stroke="url(#gateStrokeMaster)" stroke-width="1.5" />
+            <path d="M178 860V436a182 182 0 0 1 364 0v424" stroke="url(#gateStrokeMaster)" stroke-width="1" opacity=".6" />
+            <path d="M360 214v646M222 348v512M498 348v512M138 560h444M178 700h364" stroke="url(#gateStrokeMaster)" stroke-width=".8" opacity=".45" />
+            <path d="M282 860V450a78 78 0 0 1 156 0v410" stroke="url(#gateStrokeMaster)" stroke-width="1.2" opacity=".75" />
+            <circle cx="360" cy="430" r="8" fill="#e2542c" opacity=".85" />
+            <circle cx="360" cy="430" r="24" stroke="#d3ad68" stroke-opacity=".35" />
+            <path d="M90 868h540M60 884h600" stroke="#d3ad68" stroke-opacity=".18" />
+        </svg>
+
+        <div class="login-hero__content">
+            <div class="login-brand">
+                <span class="brand__mark"><Icon Name="skull" Size="20" /></span>
+                <span>Gates of Hell</span>
+                <span class="login-brand__rule"></span>
+                <span class="login-brand__tag">MESTRE</span>
+            </div>
+
+            <div class="login-hero__main">
+                <span class="eyebrow">Cátedra do mestre</span>
+                <h1>Toda a mesa<br />sob o seu <em>olhar.</em></h1>
+                <p>
+                    Fichas que se atualizam enquanto você olha, um bestiário pronto para o pior,
+                    e o histórico de cada dado. Você conduz — o painel mostra o que acontece.
+                </p>
+
+                <ul class="login-features">
+                    <li>
+                        <span class="login-features__num">01</span>
+                        <span>
+                            <strong>Fichas ao vivo</strong>
+                            <span>Vida, status e perícias sincronizados a cada cinco segundos.</span>
+                        </span>
+                    </li>
+                    <li>
+                        <span class="login-features__num">02</span>
+                        <span>
+                            <strong>Bestiário</strong>
+                            <span>Monstros com vida, atributos e notas — mais dados para cada um.</span>
+                        </span>
+                    </li>
+                    <li>
+                        <span class="login-features__num">03</span>
+                        <span>
+                            <strong>Controle das rolagens</strong>
+                            <span>Role como a mesa, por ficha ou por monstro. Apague o que não aconteceu.</span>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="login-hero__foot">
+                <span>Google Sheets + Apps Script</span>
+                <span class="dot-sep">·</span>
+                <span>Dados por Rollem V1</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="login-form-side">
+        <LoginPanel MasterMode="true" RedirectTo="painel" />
+        <p class="login-master-note">
+            Os jogadores entram pelo app das fichas. O cadastro de mestre exige o
+            código definido em <code>MESTRE_CODE</code> no Apps Script.
+        </p>
+    </section>
+</div>

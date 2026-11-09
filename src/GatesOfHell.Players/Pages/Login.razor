@@ -1,0 +1,91 @@
+@page "/login"
+@layout EmptyLayout
+
+<PageTitle>Entrar — Gates of Hell</PageTitle>
+
+<div class="login-screen">
+    <section class="login-hero">
+        <div class="login-hero__glow"></div>
+
+        <svg class="gate" viewBox="0 0 720 900" fill="none" aria-hidden="true">
+            <defs>
+                <linearGradient id="gateStroke" x1="360" y1="180" x2="360" y2="900" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#d3ad68" stop-opacity=".8" />
+                    <stop offset=".55" stop-color="#e2542c" stop-opacity=".45" />
+                    <stop offset="1" stop-color="#e2542c" stop-opacity="0" />
+                </linearGradient>
+                <radialGradient id="gateGlow" cx="0" cy="0" r="1" gradientTransform="translate(360 430) rotate(90) scale(330 270)" gradientUnits="userSpaceOnUse">
+                    <stop stop-color="#e2542c" stop-opacity=".26" />
+                    <stop offset="1" stop-color="#e2542c" stop-opacity="0" />
+                </radialGradient>
+                <filter id="gateBlur" x="-40%" y="-40%" width="180%" height="180%">
+                    <feGaussianBlur stdDeviation="26" />
+                </filter>
+            </defs>
+
+            <ellipse cx="360" cy="430" rx="270" ry="330" fill="url(#gateGlow)" filter="url(#gateBlur)" />
+            <path d="M138 860V430a222 222 0 0 1 444 0v430" stroke="url(#gateStroke)" stroke-width="1.5" />
+            <path d="M178 860V436a182 182 0 0 1 364 0v424" stroke="url(#gateStroke)" stroke-width="1" opacity=".6" />
+            <path d="M360 214v646M222 348v512M498 348v512M138 560h444M178 700h364" stroke="url(#gateStroke)" stroke-width=".8" opacity=".45" />
+            <path d="M282 860V450a78 78 0 0 1 156 0v410" stroke="url(#gateStroke)" stroke-width="1.2" opacity=".75" />
+            <circle cx="360" cy="430" r="8" fill="#d3ad68" opacity=".8" />
+            <circle cx="360" cy="430" r="24" stroke="#e2542c" stroke-opacity=".35" />
+            <path d="M90 868h540M60 884h600" stroke="#d3ad68" stroke-opacity=".18" />
+        </svg>
+
+        <div class="login-hero__content">
+            <div class="login-brand">
+                <span class="brand__mark"><Icon Name="flame" Size="20" /></span>
+                <span>Gates of Hell</span>
+                <span class="login-brand__rule"></span>
+                <span class="login-brand__tag">RPG</span>
+            </div>
+
+            <div class="login-hero__main">
+                <span class="eyebrow">Crônicas da mesa</span>
+                <h1>As fichas pesam<br />mais que a <em>alma.</em></h1>
+                <p>
+                    Um lugar para a sua ficha viver: atributos, perícias, inventário e cada
+                    dado que a mesa rolar. O mestre vê tudo acontecer — e a planilha nunca esquece.
+                </p>
+
+                <ul class="login-features">
+                    <li>
+                        <span class="login-features__num">01</span>
+                        <span>
+                            <strong>Ficha completa</strong>
+                            <span>Status, atributos e o orçamento de perícias da classe.</span>
+                        </span>
+                    </li>
+                    <li>
+                        <span class="login-features__num">02</span>
+                        <span>
+                            <strong>Rolagens Rollem</strong>
+                            <span>Mesma sintaxe do bot: d20, explosões, keep/drop e inline.</span>
+                        </span>
+                    </li>
+                    <li>
+                        <span class="login-features__num">03</span>
+                        <span>
+                            <strong>Mesa viva</strong>
+                            <span>Itens e mudanças do mestre aparecem sem recarregar.</span>
+                        </span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="login-hero__foot">
+                <span>Google Sheets + Apps Script</span>
+                <span class="dot-sep">·</span>
+                <span>Dados por Rollem V1</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="login-form-side">
+        <LoginPanel MasterMode="false" RedirectTo="ficha" />
+        <p class="login-master-note">
+            Está conduzindo a mesa? O painel do mestre roda em um app separado.
+        </p>
+    </section>
+</div>

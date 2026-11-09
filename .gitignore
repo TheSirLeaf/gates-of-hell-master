@@ -1,0 +1,20 @@
+# .NET
+bin/
+obj/
+.vs/
+*.user
+*.suo
+
+# Ferramentas locais
+.clasp.json
+node_modules/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Configurações locais que possam conter segredos
+.env
+.env.*
+!.env.example
+appsettings.Local.json

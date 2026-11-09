@@ -1,0 +1,240 @@
+@inherits LayoutComponentBase
+@inject AuthService Auth
+@inject GameSyncService Sync
+@inject NavigationManager Nav
+@implements IDisposable
+
+@if (_carregando)
+{
+    <div class="boot-screen">
+        <span class="boot-mark"><Icon Name="skull" Size="28" /></span>
+        <span class="boot-title">Cátedra do mestre</span>
+        <span class="boot-sub">Abrindo o painel...</span>
+    </div>
+}
+else if (_acessoNegado)
+{
+    <div class="access-denied">
+        <div class="onboarding">
+            <div class="onboarding__sigil"><Icon Name="lock" Size="34" /></div>
+            <span class="eyebrow">Acesso restrito</span>
+            <h1>Esta cadeira não é sua.</h1>
+            <p>
+                A conta <strong>@Auth.User?.Nome</strong> não tem o papel de mestre.
+                Entre com uma conta de mestre criada com o código do Apps Script.
+            </p>
+            <div class="onboarding__actions">
+                <button type="button" class="btn btn--primary" @onclick="SairAsync">
+                    <Icon Name="logout" Size="16" /> Trocar de conta
+                </button>
+            </div>
+        </div>
+    </div>
+}
+else if (Auth.IsAuthenticated)
+{
+    <div class="shell @(_menuAberto ? "shell--menu-open" : "")">
+        <div class="shell__scrim" @onclick="() => _menuAberto = false"></div>
+
+        <aside class="sidebar">
+            <a class="brand" href="@Link("painel")" @onclick="FecharMenu">
+                <span class="brand__mark"><Icon Name="skull" Size="20" /></span>
+                <span class="brand__text">
+                    <strong>Gates of Hell</strong>
+                    <span>Cátedra do mestre</span>
+                </span>
+            </a>
+
+            <nav class="nav">
+                <span class="nav__label">Mesa</span>
+                <NavLink href="painel" class="nav__link" @onclick="FecharMenu">
+                    <Icon Name="eye" Size="17" />
+                    <span>Painel ao vivo</span>
+                </NavLink>
+                <NavLink href="fichas" class="nav__link" Match="NavLinkMatch.Prefix" @onclick="FecharMenu">
+                    <Icon Name="users" Size="17" />
+                    <span>Fichas</span>
+                </NavLink>
+                <NavLink href="monstros" class="nav__link" @onclick="FecharMenu">
+                    <Icon Name="skull" Size="17" />
+                    <span>Monstros</span>
+                </NavLink>
+                <NavLink href="rolagens" class="nav__link" @onclick="FecharMenu">
+                    <Icon Name="d20" Size="17" />
+                    <span>Rolagens</span>
+                </NavLink>
+                <NavLink href="config" class="nav__link" @onclick="FecharMenu">
+                    <Icon Name="settings" Size="17" />
+                    <span>Configurações</span>
+                </NavLink>
+            </nav>
+
+            <div class="sidebar__chars">
+                <span class="nav__label">Fichas ao vivo</span>
+
+                @if (Personagens.Count == 0)
+                {
+                    <p class="sidebar__empty">Nenhuma ficha na mesa.</p>
+                }
+                else
+                {
+                    @foreach (var personagem in Personagens.Take(8))
+                    {
+                        <a href="@Link($"fichas/{personagem.Id}")"
+                           class="char-link @(EhAtiva(personagem) ? "char-link--active" : "")"
+                           @onclick="FecharMenu">
+                            <span class="char-link__mark">@Inicial(personagem.Nome)</span>
+                            <span class="char-link__body">
+                                <strong>@personagem.Nome</strong>
+                                <span>@(string.IsNullOrWhiteSpace(personagem.Classe) ? "sem classe" : personagem.Classe)</span>
+                            </span>
+                            <span class="char-link__hp" title="Vida">@personagem.Vida</span>
+                        </a>
+                    }
+
+                    @if (Personagens.Count > 8)
+                    {
+                        <a href="@Link("fichas")" class="char-link" @onclick="FecharMenu">
+                            <span class="char-link__mark"><Icon Name="users" Size="14" /></span>
+                            <span class="char-link__body">
+                                <strong>Ver todas</strong>
+                                <span>@Personagens.Count fichas</span>
+                            </span>
+                        </a>
+                    }
+                }
+            </div>
+
+            <div class="sidebar__summary">
+                <span><strong>@Personagens.Count</strong> fichas</span>
+                <span class="dot-sep">·</span>
+                <span><strong>@Monstros.Count</strong> monstros</span>
+            </div>
+
+            <div class="sidebar__user">
+                <span class="avatar avatar--master">@Inicial(Auth.User?.Nome)</span>
+                <span class="sidebar__user-body">
+                    <strong>@Auth.User?.Nome</strong>
+                    <span>Mestre</span>
+                </span>
+                <button type="button" class="icon-btn" title="Sair" @onclick="SairAsync">
+                    <Icon Name="logout" Size="17" />
+                </button>
+            </div>
+        </aside>
+
+        <div class="main">
+            <header class="topbar">
+                <button type="button" class="icon-btn menu-btn" title="Menu" @onclick="() => _menuAberto = !_menuAberto">
+                    <Icon Name="menu" Size="19" />
+                </button>
+                <span class="topbar__section">@Secao</span>
+                <div class="topbar__right">
+                    <LiveBadge IsLive="@Sync.IsRunning" LastSync="@Sync.LastSync" Error="@Sync.Error" />
+                    <span class="topbar__divider"></span>
+                    <span class="topbar__user">@Auth.User?.Nome</span>
+                </div>
+            </header>
+
+            <main class="content">
+                @if (_sessaoExpirada)
+                {
+                    <div class="alert alert--warn content-alert">
+                        <Icon Name="alert" Size="17" />
+                        <span>Sua sessão expirou. Entre novamente para continuar.</span>
+                        <button type="button" class="btn btn--ghost btn--xs" @onclick="SairAsync">Entrar novamente</button>
+                    </div>
+                }
+
+                @Body
+            </main>
+        </div>
+    </div>
+}
+
+@code {
+    private string Link(string caminho) => Nav.BaseUri + caminho.TrimStart('/');
+
+    private bool _carregando = true;
+    private bool _acessoNegado;
+    private bool _menuAberto;
+    private bool _sessaoExpirada;
+
+    private IReadOnlyList<Personagem> Personagens =>
+        (Sync.State?.Personagens ?? [])
+        .OrderBy(p => p.Nome, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    private IReadOnlyList<Monstro> Monstros => Sync.State?.Monstros ?? [];
+
+    private string Secao
+    {
+        get
+        {
+            var uri = Nav.Uri;
+            if (uri.Contains("/rolagens", StringComparison.OrdinalIgnoreCase)) return "Rolagens da mesa";
+            if (uri.Contains("/monstros", StringComparison.OrdinalIgnoreCase)) return "Bestiário";
+            if (uri.Contains("/fichas", StringComparison.OrdinalIgnoreCase)) return "Fichas da mesa";
+            if (uri.Contains("/config", StringComparison.OrdinalIgnoreCase)) return "Configurações";
+            return "Painel ao vivo";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+
+        if (!Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("login");
+            return;
+        }
+
+        if (!Auth.IsMaster)
+        {
+            _acessoNegado = true;
+            _carregando = false;
+            return;
+        }
+
+        Sync.Changed += OnSyncChanged;
+        Sync.SessionExpired += OnSessionExpired;
+        Nav.LocationChanged += OnLocationChanged;
+
+        Sync.Start();
+        await Sync.RefreshAsync();
+        _carregando = false;
+    }
+
+    private void OnSyncChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnSessionExpired()
+    {
+        _sessaoExpirada = true;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => _menuAberto = false;
+    private void FecharMenu() => _menuAberto = false;
+
+    private bool EhAtiva(Personagem personagem) =>
+        Nav.Uri.Contains($"/fichas/{personagem.Id}", StringComparison.OrdinalIgnoreCase);
+
+    private async Task SairAsync()
+    {
+        Sync.Stop();
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("login");
+    }
+
+    private static string Inicial(string? nome) =>
+        string.IsNullOrWhiteSpace(nome) ? "?" : nome.Trim()[..1].ToUpperInvariant();
+
+    public void Dispose()
+    {
+        Sync.Changed -= OnSyncChanged;
+        Sync.SessionExpired -= OnSessionExpired;
+        Nav.LocationChanged -= OnLocationChanged;
+        Sync.Stop();
+    }
+}

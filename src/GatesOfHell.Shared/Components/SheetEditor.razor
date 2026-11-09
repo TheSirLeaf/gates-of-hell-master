@@ -1,0 +1,348 @@
+@using System.Text
+
+<div class="sheet-editor">
+    <section class="card">
+        <div class="card__head">
+            <div>
+                <div class="eyebrow">Perfil</div>
+                <h2 class="card__title">Identidade</h2>
+            </div>
+            <span class="chip">@(string.IsNullOrWhiteSpace(Personagem.Classe) ? "Sem classe" : Personagem.Classe)</span>
+        </div>
+
+        <div class="form-grid form-grid--3">
+            <label class="field field--wide">
+                <span>Nome</span>
+                <input class="input" @bind="Personagem.Nome" maxlength="80" disabled="@ReadOnly" placeholder="Nome da ficha" />
+            </label>
+            <label class="field">
+                <span>Classe</span>
+                <input class="input" @bind="Personagem.Classe" maxlength="60" disabled="@ReadOnly" placeholder="Ex.: Caçador" />
+            </label>
+            <label class="field">
+                <span>Raça</span>
+                <input class="input" @bind="Personagem.Raca" maxlength="60" disabled="@ReadOnly" placeholder="Ex.: Humano" />
+            </label>
+            <label class="field">
+                <span>Valor da classe</span>
+                <input class="input" type="number" step="1" @bind="Personagem.ClasseValor" disabled="@ReadOnly" />
+            </label>
+            <label class="field">
+                <span>Perícia da classe</span>
+                <input class="input" @bind="Personagem.PericiaClasse" maxlength="60" disabled="@ReadOnly" placeholder="Ex.: Luta" />
+            </label>
+            <label class="field">
+                <span>Armadura escolhida</span>
+                <input class="input" @bind="Personagem.Armadura" maxlength="80" disabled="@ReadOnly" placeholder="Nome da armadura" />
+            </label>
+        </div>
+
+        <p class="hint">
+            Os testes usam um d20 por ponto do atributo e mantêm o maior resultado
+            (<code>3d20kh1</code> para Físico 3), com no mínimo 1d20. O valor da classe
+            é somado à Vida e à Stamina. A perícia da classe conta como uma perícia
+            extra no orçamento de Mental.
+        </p>
+    </section>
+
+    <section class="sheet-section">
+        <div class="section-head">
+            <div>
+                <div class="eyebrow">Status</div>
+                <h2 class="section-title">Vitalidade</h2>
+            </div>
+            <span class="section-note">Role ou ajuste manualmente</span>
+        </div>
+
+        <div class="status-grid">
+            <article class="status-card status-card--vida">
+                <div class="status-card__head">
+                    <span class="eyebrow">Vida</span>
+                    <Icon Name="heart" Size="18" />
+                </div>
+                <input class="status-card__input" type="number" @bind="Personagem.Vida" disabled="@ReadOnly" aria-label="Vida" />
+                <div class="status-card__hint">@FormulaStatus(StatusKind.Vida)</div>
+                @if (MostrarBotoesRolagem && !ReadOnly)
+                {
+                    <button type="button" class="btn btn--ghost btn--sm" @onclick="() => RolarStatusAsync(StatusKind.Vida)">
+                        <Icon Name="d20" Size="14" /> Rolar
+                    </button>
+                }
+            </article>
+
+            <article class="status-card status-card--postura">
+                <div class="status-card__head">
+                    <span class="eyebrow">Postura</span>
+                    <Icon Name="shield" Size="18" />
+                </div>
+                <input class="status-card__input" type="number" @bind="Personagem.Postura" disabled="@ReadOnly" aria-label="Postura" />
+                <div class="status-card__hint">@FormulaStatus(StatusKind.Postura)</div>
+                @if (MostrarBotoesRolagem && !ReadOnly)
+                {
+                    <button type="button" class="btn btn--ghost btn--sm" @onclick="() => RolarStatusAsync(StatusKind.Postura)">
+                        <Icon Name="d20" Size="14" /> Rolar
+                    </button>
+                }
+            </article>
+
+            <article class="status-card status-card--stamina">
+                <div class="status-card__head">
+                    <span class="eyebrow">Stamina</span>
+                    <Icon Name="bolt" Size="18" />
+                </div>
+                <input class="status-card__input" type="number" @bind="Personagem.Stamina" disabled="@ReadOnly" aria-label="Stamina" />
+                <div class="status-card__hint">@FormulaStatus(StatusKind.Stamina)</div>
+                @if (MostrarBotoesRolagem && !ReadOnly)
+                {
+                    <button type="button" class="btn btn--ghost btn--sm" @onclick="() => RolarStatusAsync(StatusKind.Stamina)">
+                        <Icon Name="d20" Size="14" /> Rolar
+                    </button>
+                }
+            </article>
+
+            <article class="status-card status-card--resistencia">
+                <div class="status-card__head">
+                    <span class="eyebrow">Resistência</span>
+                    <Icon Name="shield" Size="18" />
+                </div>
+                <input class="status-card__input" type="number" @bind="Personagem.Resistencia" disabled="@ReadOnly" aria-label="Resistência" />
+                <div class="status-card__hint">
+                    @if (!string.IsNullOrWhiteSpace(Personagem.Armadura))
+                    {
+                        <span>@Personagem.Armadura</span>
+                    }
+                    else
+                    {
+                        <span>Valor da armadura escolhida</span>
+                    }
+                </div>
+                @if (!ReadOnly && Armaduras.Count > 0)
+                {
+                    <div class="status-card__armors">
+                        @foreach (var armadura in Armaduras.Take(4))
+                        {
+                            <button type="button" class="chip chip--button" title="Usar @armadura.Nome (@Valor(armadura.Valor))"
+                                    @onclick="() => AplicarArmadura(armadura)">
+                                @armadura.Nome
+                                @if (armadura.Valor != 0)
+                                {
+                                    <span>@Valor(armadura.Valor)</span>
+                                }
+                            </button>
+                        }
+                    </div>
+                }
+            </article>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-head">
+            <div>
+                <div class="eyebrow">Atributos</div>
+                <h2 class="section-title">O que sustenta a carne</h2>
+            </div>
+            <span class="section-note">Físico · Mental · Espiritual</span>
+        </div>
+
+        <div class="attr-grid">
+            <label class="attr-card">
+                <span class="attr-card__name">Físico</span>
+                <input class="attr-card__input" type="number" min="0" max="99" @bind="Personagem.Fisico" disabled="@ReadOnly" aria-label="Físico" />
+                <span class="attr-card__hint">teste: @Testes.Expressao(Personagem.Fisico)</span>
+            </label>
+            <label class="attr-card">
+                <span class="attr-card__name">Mental</span>
+                <input class="attr-card__input" type="number" min="0" max="99" @bind="Personagem.Mental" disabled="@ReadOnly" aria-label="Mental" />
+                <span class="attr-card__hint">teste: @Testes.Expressao(Personagem.Mental)</span>
+            </label>
+            <label class="attr-card">
+                <span class="attr-card__name">Espiritual</span>
+                <input class="attr-card__input" type="number" min="0" max="99" @bind="Personagem.Espiritual" disabled="@ReadOnly" aria-label="Espiritual" />
+                <span class="attr-card__hint">teste: @Testes.Expressao(Personagem.Espiritual)</span>
+            </label>
+        </div>
+    </section>
+
+    <section class="card">
+        <div class="section-head">
+            <div>
+                <div class="eyebrow">Perícias</div>
+                <h2 class="section-title">Treinamento</h2>
+            </div>
+            <span class="chip @(PericiasExcedidas ? "chip--danger" : "chip--ok")">
+                @Personagem.PericiasComPontos de @Personagem.LimitePericias
+            </span>
+        </div>
+
+        <p class="hint">
+            Uma perícia por ponto em Mental, mais a perícia da classe.
+            @if (Personagem.LimitePericias > 0)
+            {
+                <span>Orçamento atual: <strong>@Personagem.LimitePericias</strong>.</span>
+            }
+            @if (PericiasExcedidas)
+            {
+                <span class="text-danger">Você passou do orçamento — ajuste com o mestre.</span>
+            }
+        </p>
+
+        <div class="skill-grid">
+            @foreach (var grupo in Pericias.Grupos)
+            {
+                <div class="skill-group">
+                    <h3 class="skill-group__title">@grupo</h3>
+                    @foreach (var pericia in Pericias.DoGrupo(grupo))
+                    {
+                        <div class="skill-row @(EhPericiaDaClasse(pericia.Nome) ? "skill-row--class" : "")">
+                            <span class="skill-row__name">
+                                @pericia.Nome
+                                @if (EhPericiaDaClasse(pericia.Nome))
+                                {
+                                    <span class="badge badge--class">classe</span>
+                                }
+                            </span>
+                            <span class="skill-row__formula" title="Atributo + valor da perícia">
+                                @Testes.ExpressaoDaPericia(Personagem, pericia)
+                            </span>
+                            <input class="input input--tiny" type="number" min="0" max="99"
+                                   value="@Personagem.GetPericia(pericia.Chave)"
+                                   @onchange="e => AlterarPericia(pericia.Chave, e)"
+                                   disabled="@ReadOnly"
+                                   aria-label="@pericia.Nome" />
+                            @if (MostrarBotoesRolagem && !ReadOnly)
+                            {
+                                <button type="button" class="icon-btn skill-row__roll"
+                                        title="Rolar @pericia.Nome"
+                                        aria-label="Rolar @pericia.Nome"
+                                        @onclick="() => RolarPericiaAsync(pericia)">
+                                    <Icon Name="d20" Size="14" />
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </section>
+</div>
+
+@code {
+    [Parameter] public Personagem Personagem { get; set; } = new();
+    [Parameter] public Config Config { get; set; } = new();
+    [Parameter] public IReadOnlyList<ItemInventario> Itens { get; set; } = Array.Empty<ItemInventario>();
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public bool MostrarBotoesRolagem { get; set; } = true;
+    [Parameter] public EventCallback<StatusRollRequest> OnRollStatus { get; set; }
+    [Parameter] public EventCallback<SkillRollRequest> OnRollSkill { get; set; }
+
+    private bool PericiasExcedidas => Personagem.PericiasComPontos > Personagem.LimitePericias;
+
+    private IReadOnlyList<ItemInventario> Armaduras =>
+        Itens.Where(i => i.Tipo == ItemTipos.Equipamento)
+            .OrderBy(i => i.Nome)
+            .ToList();
+
+    private async Task RolarStatusAsync(StatusKind status)
+    {
+        var expressao = ExpressaoStatus(status);
+        if (expressao is null)
+            return;
+
+        await OnRollStatus.InvokeAsync(new StatusRollRequest(status, expressao, NomeStatus(status)));
+    }
+
+    private async Task RolarPericiaAsync(PericiaDef pericia)
+    {
+        var atributo = Testes.AtributoDoGrupo(pericia.Grupo);
+        var expressao = Testes.ExpressaoDaPericia(Personagem, pericia);
+        await OnRollSkill.InvokeAsync(new SkillRollRequest(pericia.Chave, pericia.Nome, atributo, expressao));
+    }
+
+    private string? ExpressaoStatus(StatusKind status)
+    {
+        var atributo = status switch
+        {
+            StatusKind.Vida or StatusKind.Postura => Personagem.Fisico,
+            StatusKind.Stamina => Personagem.Espiritual,
+            _ => 0
+        };
+
+        var expressao = Testes.Expressao(atributo);
+        if (status is StatusKind.Vida or StatusKind.Stamina && Math.Abs(Personagem.ClasseValor) > 0.0001)
+        {
+            expressao += Personagem.ClasseValor > 0
+                ? "+" + Valor(Personagem.ClasseValor)
+                : "-" + Valor(Math.Abs(Personagem.ClasseValor));
+        }
+
+        return expressao;
+    }
+
+    private string FormulaStatus(StatusKind status)
+    {
+        var atributo = status switch
+        {
+            StatusKind.Vida or StatusKind.Postura => Personagem.Fisico,
+            StatusKind.Stamina => Personagem.Espiritual,
+            _ => 0
+        };
+
+        if (status == StatusKind.Resistencia)
+            return "Valor da armadura escolhida";
+
+        var texto = Testes.Expressao(atributo);
+        if (status is StatusKind.Vida or StatusKind.Stamina && Math.Abs(Personagem.ClasseValor) > 0.0001)
+            texto += $" {(Personagem.ClasseValor > 0 ? "+" : "−")} {Valor(Math.Abs(Personagem.ClasseValor))} da classe";
+
+        return texto;
+    }
+
+    private static string NomeStatus(StatusKind status) => status switch
+    {
+        StatusKind.Vida => "Vida",
+        StatusKind.Postura => "Postura",
+        StatusKind.Stamina => "Stamina",
+        _ => "Resistência"
+    };
+
+    private void AlterarPericia(string chave, ChangeEventArgs args)
+    {
+        if (int.TryParse(args.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var valor))
+            Personagem.SetPericia(chave, valor);
+    }
+
+    private void AplicarArmadura(ItemInventario armadura)
+    {
+        Personagem.Armadura = armadura.Nome;
+        Personagem.Resistencia = (int)Math.Round(armadura.Valor);
+    }
+
+    private bool EhPericiaDaClasse(string nome)
+    {
+        if (string.IsNullOrWhiteSpace(Personagem.PericiaClasse))
+            return false;
+
+        var alvo = Normalizar(Personagem.PericiaClasse);
+        return alvo.Length > 0 && alvo.Contains(Normalizar(nome), StringComparison.Ordinal);
+    }
+
+    private static string Normalizar(string texto)
+    {
+        var decomposto = texto.Normalize(NormalizationForm.FormD);
+        var construtor = new StringBuilder(decomposto.Length);
+
+        foreach (var caractere in decomposto)
+        {
+            if (CharUnicodeInfo.GetUnicodeCategory(caractere) != UnicodeCategory.NonSpacingMark)
+                construtor.Append(char.ToLowerInvariant(caractere));
+        }
+
+        return construtor.ToString().Trim();
+    }
+
+    private static string Valor(double valor) =>
+        Math.Abs(valor - Math.Round(valor)) < 0.000001
+            ? ((long)Math.Round(valor)).ToString(CultureInfo.InvariantCulture)
+            : valor.ToString("0.##", CultureInfo.InvariantCulture);
+}

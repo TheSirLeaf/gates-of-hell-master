@@ -1,0 +1,128 @@
+@if (Visiveis.Count == 0)
+{
+    <div class="empty empty--small">
+        <Icon Name="d20" Size="24" />
+        <p>@EmptyText</p>
+    </div>
+}
+else
+{
+    <div class="roll-feed @(Compact ? "roll-feed--compact" : "")">
+        @foreach (var entrada in Visiveis)
+        {
+            <article class="roll" @key="entrada.Id">
+                <header class="roll__meta">
+                    <span class="avatar" style="--avatar-hue: @Matiz(entrada.Autor)">@Inicial(entrada.Autor)</span>
+                    <div class="roll__who">
+                        <strong>@(string.IsNullOrWhiteSpace(entrada.Autor) ? "Alguém" : entrada.Autor)</strong>
+                        <span>
+                            @if (!string.IsNullOrWhiteSpace(entrada.Contexto))
+                            {
+                                <span class="roll__context">@entrada.Contexto</span>
+                                <span class="dot-sep">·</span>
+                            }
+                            <time title="@entrada.CriadoEm">@Tempo(entrada)</time>
+                        </span>
+                    </div>
+                    @if (CanDelete)
+                    {
+                        @if (_pendente == entrada.Id)
+                        {
+                            <div class="roll__confirm">
+                                <button type="button" class="btn btn--danger btn--xs" @onclick="() => ConfirmarAsync(entrada)">Excluir</button>
+                                <button type="button" class="btn btn--ghost btn--xs" @onclick="() => _pendente = null">Não</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button" class="icon-btn" title="Excluir rolagem" @onclick="() => _pendente = entrada.Id">
+                                <Icon Name="trash" Size="15" />
+                            </button>
+                        }
+                    }
+                </header>
+
+                <div class="roll__body">
+                    @if (!string.IsNullOrWhiteSpace(entrada.Rotulo))
+                    {
+                        <div class="roll__label">@entrada.Rotulo</div>
+                    }
+                    <div class="roll__line">
+                        <span class="roll__total">@Numero(entrada.Resultado)</span>
+                        <span class="roll__arrow">⟵</span>
+                        <DiceDetail Detalhe="@entrada.Detalhe" />
+                        <code class="roll__expr">@entrada.Expressao</code>
+                    </div>
+                    @if (entrada.Sucesso is bool sucesso)
+                    {
+                        <span class="badge @(sucesso ? "badge--ok" : "badge--fail")">
+                            @(sucesso ? "Sucesso" : "Falha")
+                        </span>
+                    }
+                </div>
+            </article>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<RollEntry> Entries { get; set; } = Array.Empty<RollEntry>();
+    [Parameter] public bool CanDelete { get; set; }
+    [Parameter] public EventCallback<RollEntry> OnDelete { get; set; }
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public int Limit { get; set; }
+    [Parameter] public string EmptyText { get; set; } = "Nenhuma rolagem ainda. O destino aguarda.";
+
+    private string? _pendente;
+
+    private IReadOnlyList<RollEntry> Visiveis =>
+        (Limit > 0 ? Entries.Take(Limit) : Entries).ToList();
+
+    private async Task ConfirmarAsync(RollEntry entrada)
+    {
+        _pendente = null;
+        await OnDelete.InvokeAsync(entrada);
+    }
+
+    private static string Numero(double valor) =>
+        Math.Abs(valor - Math.Round(valor)) < 0.000001
+            ? ((long)Math.Round(valor)).ToString(CultureInfo.InvariantCulture)
+            : valor.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string Inicial(string? nome) =>
+        string.IsNullOrWhiteSpace(nome) ? "?" : nome.Trim()[..1].ToUpperInvariant();
+
+    private static int Matiz(string? nome)
+    {
+        if (string.IsNullOrWhiteSpace(nome))
+            return 12;
+
+        unchecked
+        {
+            var hash = 17u;
+            foreach (var caractere in nome)
+                hash = hash * 31u + caractere;
+
+            return (int)(hash % 360);
+        }
+    }
+
+    private static string Tempo(RollEntry entrada)
+    {
+        if (!DateTimeOffset.TryParse(entrada.CriadoEm, CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal, out var quando))
+            return "";
+
+        var local = quando.ToLocalTime();
+        var diferenca = DateTimeOffset.Now - local;
+
+        if (diferenca.TotalSeconds < 45)
+            return "agora";
+        if (diferenca.TotalMinutes < 60)
+            return $"há {(int)Math.Max(1, diferenca.TotalMinutes)} min";
+        if (local.Date == DateTimeOffset.Now.Date)
+            return local.ToString("HH:mm");
+
+        return local.ToString("dd/MM HH:mm");
+    }
+}

@@ -1,0 +1,47 @@
+@if (!string.IsNullOrWhiteSpace(Detalhe))
+{
+    <span class="dice-detail" title="Dados rolados">
+        @foreach (var token in Tokens)
+        {
+            <span class="die @(token.Dropped ? "die--dropped" : token.Critico ? "die--crit" : "")">@token.Text</span>
+        }
+    </span>
+}
+
+@code {
+    [Parameter] public string? Detalhe { get; set; }
+
+    private IReadOnlyList<Token> Tokens => Parse(Detalhe);
+
+    private static IReadOnlyList<Token> Parse(string? detalhe)
+    {
+        if (string.IsNullOrWhiteSpace(detalhe))
+            return [];
+
+        var tokens = new List<Token>();
+        foreach (var parte in detalhe.Split(','))
+        {
+            var texto = parte.Trim();
+            if (texto.Length == 0)
+                continue;
+
+            if (texto.StartsWith("~~", StringComparison.Ordinal) && texto.EndsWith("~~", StringComparison.Ordinal))
+            {
+                tokens.Add(new Token(texto[2..^2], true, false));
+                continue;
+            }
+
+            if (texto.StartsWith("**", StringComparison.Ordinal) && texto.EndsWith("**", StringComparison.Ordinal))
+            {
+                tokens.Add(new Token(texto[2..^2], false, true));
+                continue;
+            }
+
+            tokens.Add(new Token(texto, false, false));
+        }
+
+        return tokens;
+    }
+
+    private sealed record Token(string Text, bool Dropped, bool Critico);
+}

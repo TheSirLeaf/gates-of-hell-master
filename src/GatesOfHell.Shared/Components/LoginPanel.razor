@@ -1,0 +1,306 @@
+@inject AppSettings Settings
+@inject AuthService Auth
+@inject GameApiClient Api
+@inject NavigationManager Nav
+
+<div class="auth-card">
+    <div class="auth-card__brand">
+        <span class="brand-mark"><Icon Name="flame" Size="22" /></span>
+        <span class="auth-card__brand-name">Gates of Hell</span>
+        @if (MasterMode)
+        {
+            <span class="badge badge--master">Mestre</span>
+        }
+    </div>
+
+    <div class="auth-card__intro">
+        <div class="eyebrow">@(MasterMode ? "Cadeira do mestre" : "Mesa dos jogadores")</div>
+        <h1>@(MasterMode ? "Conduza a queda." : "Abra a sua ficha.")</h1>
+        <p>
+            @(MasterMode
+                ? "Veja as fichas em tempo real, mova monstros e comande as rolagens da mesa."
+                : "Fichas, inventário e dados na mesma mesa. A planilha guarda tudo; o destino cuida do resto.")
+        </p>
+    </div>
+
+    @if (!Settings.IsConfigured || _editandoUrl)
+    {
+        <div class="connect-box">
+            <div class="connect-box__head">
+                <Icon Name="link" Size="17" />
+                <strong>@(Settings.IsConfigured ? "Alterar Web App" : "Conectar ao Google Sheets")</strong>
+            </div>
+            <p class="hint">
+                Cole a URL do Web App do Apps Script terminada em <code>/exec</code>.
+                O script fica em <code>apps-script/Code.gs</code>; rode <code>setup()</code> e publique
+                com acesso para <strong>qualquer pessoa</strong>.
+            </p>
+            <form class="connect-form" @onsubmit="ConectarAsync" @onsubmit:preventDefault>
+                <input class="input" @bind="_url" @bind:event="oninput" placeholder="https://script.google.com/macros/s/.../exec"
+                       autocomplete="off" spellcheck="false" aria-label="URL do Web App" />
+                <button type="submit" class="btn btn--primary" disabled="@_conectando">
+                    @if (_conectando)
+                    {
+                        <span class="spinner spinner--sm"></span>
+                    }
+                    else
+                    {
+                        <Icon Name="link" Size="16" />
+                    }
+                    Conectar
+                </button>
+            </form>
+            @if (!string.IsNullOrWhiteSpace(_erroConexao))
+            {
+                <div class="alert alert--warn">
+                    <Icon Name="alert" Size="16" />
+                    <span>@_erroConexao</span>
+                </div>
+            }
+            @if (Settings.IsConfigured)
+            {
+                <button type="button" class="text-button" @onclick="() => _editandoUrl = false">Cancelar</button>
+            }
+            else
+            {
+                <details class="setup-help">
+                    <summary>Como publicar o Apps Script</summary>
+                    <ol>
+                        <li>Abra <code>script.google.com</code> e crie um projeto novo.</li>
+                        <li>Cole o conteúdo de <code>apps-script/Code.gs</code> e o <code>appsscript.json</code>.</li>
+                        <li>Rode a função <code>setup()</code> e autorize o acesso.</li>
+                        <li>Implante como <strong>App da Web</strong>, executando como você, acesso <strong>qualquer pessoa</strong>.</li>
+                        <li>Copie a URL <code>/exec</code> e cole acima.</li>
+                    </ol>
+                </details>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="auth-tabs" role="tablist">
+            <button type="button" role="tab" class="auth-tab @(_modo == "login" ? "auth-tab--active" : "")"
+                    aria-selected="@(_modo == "login")" @onclick='() => TrocarModo("login")'>
+                Entrar
+            </button>
+            <button type="button" role="tab" class="auth-tab @(_modo == "cadastro" ? "auth-tab--active" : "")"
+                    aria-selected="@(_modo == "cadastro")" @onclick='() => TrocarModo("cadastro")'>
+                @(MasterMode ? "Criar conta de mestre" : "Criar conta")
+            </button>
+        </div>
+
+        <form class="auth-form" @onsubmit="EnviarAsync" @onsubmit:preventDefault>
+            @if (_modo == "cadastro")
+            {
+                <label class="field">
+                    <span>Seu nome</span>
+                    <input class="input" @bind="_nome" @bind:event="oninput" maxlength="80" autocomplete="name" placeholder="Como a mesa vai te chamar" />
+                </label>
+            }
+
+            <label class="field">
+                <span>Usuário</span>
+                <input class="input" @bind="_usuario" @bind:event="oninput" maxlength="32" autocomplete="username"
+                       placeholder="letras, números, . _ -" autocapitalize="none" spellcheck="false" />
+            </label>
+
+            <label class="field">
+                <span>Senha</span>
+                <input class="input" type="password" @bind="_senha" @bind:event="oninput" maxlength="128"
+                       autocomplete="@(_modo == "cadastro" ? "new-password" : "current-password")" placeholder="mínimo de 6 caracteres" />
+            </label>
+
+            @if (_modo == "cadastro")
+            {
+                <label class="field">
+                    <span>Confirmar senha</span>
+                    <input class="input" type="password" @bind="_confirmar" @bind:event="oninput" maxlength="128" autocomplete="new-password" />
+                </label>
+
+                @if (MasterMode)
+                {
+                    <label class="field">
+                        <span>Código de mestre</span>
+                        <input class="input" @bind="_codigoMestre" @bind:event="oninput" maxlength="80" autocomplete="off"
+                               placeholder="Definido em MESTRE_CODE no Apps Script" />
+                    </label>
+                    <p class="hint">
+                        O código está no topo de <code>Code.gs</code>. Troque o valor padrão antes de publicar.
+                    </p>
+                }
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_erro))
+            {
+                <div class="alert alert--warn">
+                    <Icon Name="alert" Size="16" />
+                    <span>@_erro</span>
+                </div>
+            }
+
+            <button type="submit" class="btn btn--primary btn--block" disabled="@_carregando">
+                @if (_carregando)
+                {
+                    <span class="spinner spinner--sm"></span>
+                    <span>Abrindo a mesa...</span>
+                }
+                else
+                {
+                    <Icon Name="d20" Size="17" />
+                    <span>@(_modo == "cadastro" ? "Criar conta e entrar" : "Entrar")</span>
+                }
+            </button>
+        </form>
+
+        <div class="auth-server">
+            <span class="live live--ligado"><span class="live__dot"></span>Planilha conectada</span>
+            <button type="button" class="text-button" @onclick="MostrarTrocaUrl">Alterar conexão</button>
+        </div>
+    }
+
+    <p class="auth-footnote">
+        Sessão local. Sua senha não é guardada no navegador.
+    </p>
+</div>
+
+@code {
+    [Parameter] public bool MasterMode { get; set; }
+    [Parameter] public string RedirectTo { get; set; } = "/";
+
+    private string _modo = "login";
+    private string _nome = "";
+    private string _usuario = "";
+    private string _senha = "";
+    private string _confirmar = "";
+    private string _codigoMestre = "";
+    private string _url = "";
+    private string? _erro;
+    private string? _erroConexao;
+    private bool _carregando;
+    private bool _conectando;
+    private bool _editandoUrl;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Settings.InitializeAsync();
+        await Auth.InitializeAsync();
+        _url = Settings.ApiUrl;
+
+        if (Auth.IsAuthenticated)
+            Nav.NavigateTo(RedirectTo);
+    }
+
+    private void TrocarModo(string modo)
+    {
+        _modo = modo;
+        _erro = null;
+    }
+
+    private void MostrarTrocaUrl()
+    {
+        _url = Settings.ApiUrl;
+        _editandoUrl = true;
+        _erroConexao = null;
+    }
+
+    private async Task ConectarAsync()
+    {
+        _erroConexao = null;
+        _conectando = true;
+
+        try
+        {
+            await Api.PingUrlAsync(_url);
+            await Settings.SetApiUrlAsync(_url);
+            await Auth.ClearLocalAsync();
+            _editandoUrl = false;
+            _url = Settings.ApiUrl;
+            _erro = null;
+        }
+        catch (GameApiException ex)
+        {
+            _erroConexao = ex.Message;
+        }
+        catch (ArgumentException ex)
+        {
+            _erroConexao = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erroConexao = $"Não foi possível conectar: {ex.Message}";
+        }
+        finally
+        {
+            _conectando = false;
+        }
+    }
+
+    private async Task EnviarAsync()
+    {
+        _erro = null;
+
+        if (string.IsNullOrWhiteSpace(_usuario) || string.IsNullOrWhiteSpace(_senha))
+        {
+            _erro = "Preencha usuário e senha.";
+            return;
+        }
+
+        if (_modo == "cadastro")
+        {
+            if (string.IsNullOrWhiteSpace(_nome) || _nome.Trim().Length < 2)
+            {
+                _erro = "Informe seu nome (pelo menos 2 caracteres).";
+                return;
+            }
+
+            if (_senha.Length < 6)
+            {
+                _erro = "A senha precisa ter pelo menos 6 caracteres.";
+                return;
+            }
+
+            if (_senha != _confirmar)
+            {
+                _erro = "As senhas não conferem.";
+                return;
+            }
+
+            if (MasterMode && string.IsNullOrWhiteSpace(_codigoMestre))
+            {
+                _erro = "Informe o código de mestre para criar esta conta.";
+                return;
+            }
+        }
+
+        _carregando = true;
+        try
+        {
+            if (_modo == "cadastro")
+            {
+                await Auth.RegisterAsync(
+                    _nome.Trim(),
+                    _usuario.Trim(),
+                    _senha,
+                    MasterMode ? _codigoMestre.Trim() : null);
+            }
+            else
+            {
+                await Auth.LoginAsync(_usuario.Trim(), _senha);
+            }
+
+            Nav.NavigateTo(RedirectTo);
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível entrar: {ex.Message}";
+        }
+        finally
+        {
+            _carregando = false;
+        }
+    }
+}

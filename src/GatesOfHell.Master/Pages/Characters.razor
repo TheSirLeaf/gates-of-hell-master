@@ -1,0 +1,611 @@
+@page "/fichas"
+@page "/fichas/{Id}"
+@inject AuthService Auth
+@inject GameApiClient Api
+@inject GameSyncService Sync
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Fichas — Gates of Hell</PageTitle>
+
+<header class="page-head">
+    <div class="page-head__main">
+        <span class="eyebrow">Mesa ao vivo</span>
+        <h1>Fichas da mesa</h1>
+        <p class="page-sub">
+            A ficha selecionada se atualiza sozinha. Clique em editar para mudar status,
+            atributos, perícias e inventário de qualquer jogador.
+        </p>
+    </div>
+    <div class="page-head__actions">
+        <button type="button" class="btn btn--primary" @onclick="AbrirNova">
+            <Icon Name="plus" Size="16" /> Nova ficha
+        </button>
+    </div>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="alert alert--warn content-alert">
+        <Icon Name="alert" Size="17" />
+        <span>@_erro</span>
+    </div>
+}
+
+<div class="fichas-layout">
+    <aside class="char-list card">
+        <div class="section-head section-head--tight">
+            <div>
+                <div class="eyebrow">Personagens</div>
+                <h2 class="section-title">@Personagens.Count</h2>
+            </div>
+            <LiveBadge IsLive="@Sync.IsRunning" LastSync="@Sync.LastSync" Error="@Sync.Error" />
+        </div>
+
+        <label class="search-box">
+            <Icon Name="search" Size="15" />
+            <input class="input" @bind="_busca" @bind:event="oninput" placeholder="Buscar ficha ou jogador" aria-label="Buscar ficha" />
+        </label>
+
+        @if (Filtrados.Count == 0)
+        {
+            <div class="empty empty--small">
+                <Icon Name="search" Size="22" />
+                <p>@(Personagens.Count == 0 ? "Nenhuma ficha na mesa ainda." : "Nada encontrado com essa busca.")</p>
+            </div>
+        }
+        else
+        {
+            <div class="char-list__items">
+                @foreach (var personagem in Filtrados)
+                {
+                    <a class="char-list__item @(personagem.Id == Id ? "char-list__item--active" : "")"
+                       href="@Link($"fichas/{personagem.Id}")">
+                        <span class="avatar">@Inicial(personagem.Nome)</span>
+                        <span class="char-list__body">
+                            <strong>@personagem.Nome</strong>
+                            <span>@Dono(personagem.UsuarioId) · @(string.IsNullOrWhiteSpace(personagem.Classe) ? "sem classe" : personagem.Classe)</span>
+                        </span>
+                        <span class="char-list__hp">@personagem.Vida</span>
+                    </a>
+                }
+            </div>
+        }
+    </aside>
+
+    <div class="fichas-main">
+        @if (Exibida is not { } ficha)
+        {
+            <div class="empty empty--large">
+                <Icon Name="scroll" Size="28" />
+                <p>
+                    @(Personagens.Count == 0
+                        ? "Nenhuma ficha foi criada ainda. Os jogadores podem criar pelo app deles, ou você pode criar uma agora."
+                        : "Selecione uma ficha na lista para ver os detalhes.")
+                </p>
+                <button type="button" class="btn btn--primary btn--sm" @onclick="AbrirNova">
+                    <Icon Name="plus" Size="15" /> Criar ficha
+                </button>
+            </div>
+        }
+        else
+        {
+            <section class="workbench-head card">
+                <div class="workbench-head__identity">
+                    <span class="avatar avatar--lg">@Inicial(ficha.Nome)</span>
+                    <div>
+                        <div class="eyebrow">@(Edicao ? "Editando ficha" : "Ficha ao vivo")</div>
+                        <h2>@ficha.Nome</h2>
+                        <div class="workbench-head__meta">
+                            <span>@Dono(ficha.UsuarioId)</span>
+                            <span class="dot-sep">·</span>
+                            <span>@(string.IsNullOrWhiteSpace(ficha.Classe) ? "sem classe" : ficha.Classe)</span>
+                            <span class="dot-sep">·</span>
+                            <span>@(string.IsNullOrWhiteSpace(ficha.Raca) ? "sem raça" : ficha.Raca)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="workbench-head__actions">
+                    @if (!string.IsNullOrWhiteSpace(_mensagem))
+                    {
+                        <span class="save-state"><Icon Name="check" Size="14" /> @_mensagem</span>
+                    }
+
+                    @if (!Edicao)
+                    {
+                        <span class="read-mode"><Icon Name="eye" Size="14" /> somente leitura</span>
+                        <button type="button" class="btn btn--primary" @onclick="IniciarEdicao">
+                            <Icon Name="edit" Size="15" /> Editar
+                        </button>
+                        @if (_confirmarExclusao)
+                        {
+                            <button type="button" class="btn btn--danger btn--sm" @onclick="ExcluirAsync">Confirmar exclusão</button>
+                            <button type="button" class="btn btn--ghost btn--sm" @onclick="() => _confirmarExclusao = false">Não</button>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn--ghost btn--sm" @onclick="() => _confirmarExclusao = true">
+                                <Icon Name="trash" Size="14" /> Excluir
+                            </button>
+                        }
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn--ghost" @onclick="CancelarEdicao">Cancelar</button>
+                        <button type="button" class="btn btn--primary" @onclick="SalvarAsync" disabled="@_salvando">
+                            @if (_salvando)
+                            {
+                                <span class="spinner spinner--sm"></span>
+                            }
+                            else
+                            {
+                                <Icon Name="save" Size="15" />
+                            }
+                            Salvar ficha
+                        </button>
+                    }
+                </div>
+            </section>
+
+            <div class="sheet-layout">
+                <div class="sheet-layout__main">
+                    <SheetEditor Personagem="ficha"
+                                 Config="Configuracao"
+                                 Itens="ItensDaFicha"
+                                 ReadOnly="!Edicao"
+                                 MostrarBotoesRolagem="Edicao"
+                                 OnRollStatus="RolarStatusAsync"
+                                 OnRollSkill="RolarPericiaAsync" />
+
+                    <InventoryPanel PersonagemId="@ficha.Id"
+                                    Itens="ItensDaFicha"
+                                    Editable="true"
+                                    OnChanged="AtualizarAsync" />
+                </div>
+
+                <aside class="sheet-layout__aside">
+                    <DiceRollerPanel @ref="_roller"
+                                     Contexto="@ficha.Nome"
+                                     PersonagemId="@ficha.Id"
+                                     Placeholder="Ex.: 2d6+2 dano"
+                                     OnRolled="AtualizarAsync" />
+
+                    <section class="card">
+                        <div class="section-head section-head--tight">
+                            <div>
+                                <div class="eyebrow">Esta ficha</div>
+                                <h2 class="section-title">Rolagens recentes</h2>
+                            </div>
+                            <a class="text-button" href="@Link("rolagens")">ver todas</a>
+                        </div>
+
+                        <RollFeed Entries="RolagensDaFicha" Compact="true" Limit="6"
+                                  EmptyText="Ainda não há rolagens desta ficha." />
+                    </section>
+                </aside>
+            </div>
+        }
+    </div>
+</div>
+
+@if (_modalNova)
+{
+    <div class="modal-backdrop" @onclick="FecharNova">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal__head">
+                <div>
+                    <span class="eyebrow">Nova ficha</span>
+                    <h2 class="modal__title">Criar para um jogador</h2>
+                </div>
+                <button type="button" class="icon-btn" title="Fechar" @onclick="FecharNova">
+                    <Icon Name="close" Size="18" />
+                </button>
+            </div>
+
+            @if (Jogadores.Count == 0)
+            {
+                <div class="alert alert--warn">
+                    <Icon Name="alert" Size="16" />
+                    <span>Nenhum jogador cadastrado. Peça para criarem uma conta no app dos jogadores primeiro.</span>
+                </div>
+            }
+            else
+            {
+                <form @onsubmit="CriarFichaAsync" @onsubmit:preventDefault>
+                    <div class="form-grid">
+                        <label class="field field--wide">
+                            <span>Jogador</span>
+                            <select class="input" @bind="_novoUsuarioId">
+                                @foreach (var jogador in Jogadores)
+                                {
+                                    <option value="@jogador.Id">@jogador.Nome (@jogador.Login)</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="field field--wide">
+                            <span>Nome do personagem</span>
+                            <input class="input" @bind="_novoNome" maxlength="80" placeholder="Quem entra na mesa?" />
+                        </label>
+                        <label class="field">
+                            <span>Classe</span>
+                            <input class="input" @bind="_novaClasse" maxlength="60" placeholder="Ex.: Caçador" />
+                        </label>
+                        <label class="field">
+                            <span>Raça</span>
+                            <input class="input" @bind="_novaRaca" maxlength="60" placeholder="Ex.: Humano" />
+                        </label>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(_erroNova))
+                    {
+                        <div class="alert alert--warn">
+                            <Icon Name="alert" Size="16" />
+                            <span>@_erroNova</span>
+                        </div>
+                    }
+
+                    <div class="modal__actions">
+                        <button type="button" class="btn btn--ghost" @onclick="FecharNova">Cancelar</button>
+                        <button type="submit" class="btn btn--primary" disabled="@_criando">
+                            @if (_criando)
+                            {
+                                <span class="spinner spinner--sm"></span>
+                            }
+                            Criar ficha
+                        </button>
+                    </div>
+                </form>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string? Id { get; set; }
+    [SupplyParameterFromQuery(Name = "novo")] public bool Novo { get; set; }
+
+    private readonly DiceRoller _rollerEngine = new();
+    private DiceRollerPanel? _roller;
+    private bool _dadosProntos;
+    private bool _salvando;
+    private bool _editando;
+    private bool _criando;
+    private bool _modalNova;
+    private bool _confirmarExclusao;
+    private string? _mensagem;
+    private string? _erro;
+    private string? _erroNova;
+    private string _busca = "";
+    private Personagem? _draft;
+    private string _novoUsuarioId = "";
+    private string _novoNome = "";
+    private string _novaClasse = "";
+    private string _novaRaca = "";
+
+    private IReadOnlyList<Personagem> Personagens =>
+        (Sync.State?.Personagens ?? [])
+        .OrderBy(p => p.Nome, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    private IReadOnlyList<Usuario> Jogadores =>
+        (Sync.State?.Usuarios ?? [])
+        .Where(u => u.Papel == "jogador")
+        .OrderBy(u => u.Nome, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    private IReadOnlyList<Personagem> Filtrados
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(_busca))
+                return Personagens;
+
+            var termo = _busca.Trim();
+            return Personagens.Where(p =>
+                p.Nome.Contains(termo, StringComparison.CurrentCultureIgnoreCase) ||
+                p.Classe.Contains(termo, StringComparison.CurrentCultureIgnoreCase) ||
+                Dono(p.UsuarioId).Contains(termo, StringComparison.CurrentCultureIgnoreCase)).ToList();
+        }
+    }
+
+    private Personagem? Servidor =>
+        string.IsNullOrWhiteSpace(Id) ? null : Sync.State?.Personagens.FirstOrDefault(p => p.Id == Id);
+
+    private Personagem? Exibida => _editando ? _draft : Servidor;
+
+    private Config Configuracao => Sync.State?.Config ?? new Config();
+
+    private IReadOnlyList<ItemInventario> ItensDaFicha =>
+        (Sync.State?.Itens ?? [])
+        .Where(i => i.PersonagemId == Exibida?.Id)
+        .ToList();
+
+    private IReadOnlyList<RollEntry> RolagensDaFicha =>
+        (Sync.State?.Rolagens ?? [])
+        .Where(r => r.PersonagemId == Exibida?.Id)
+        .Take(6)
+        .ToList();
+
+    private bool Edicao => _editando && _draft is not null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+        if (!Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("login");
+            return;
+        }
+
+        if (!Auth.IsMaster)
+            return;
+
+        Sync.Changed += OnSyncChanged;
+        Sync.Start();
+        await Sync.RefreshAsync();
+        _dadosProntos = true;
+
+        if (string.IsNullOrWhiteSpace(Id) && Personagens.Count > 0)
+        {
+            Nav.NavigateTo($"fichas/{Personagens[0].Id}", replace: true);
+        }
+        else if (string.IsNullOrWhiteSpace(Id))
+        {
+            _modalNova = false;
+        }
+
+        if (Novo)
+            AbrirNova();
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!_dadosProntos)
+            return;
+
+        if (!string.IsNullOrWhiteSpace(Id) && Id != Servidor?.Id)
+        {
+            _editando = false;
+            _draft = null;
+        }
+
+        _confirmarExclusao = false;
+        _mensagem = null;
+        _erro = null;
+
+        if (Novo && !_modalNova)
+            AbrirNova();
+    }
+
+    private void OnSyncChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void IniciarEdicao()
+    {
+        if (Servidor is null)
+            return;
+
+        _draft = Servidor.Clone();
+        _editando = true;
+        _mensagem = null;
+        _erro = null;
+    }
+
+    private void CancelarEdicao()
+    {
+        _editando = false;
+        _draft = null;
+        _mensagem = null;
+        _erro = null;
+        _confirmarExclusao = false;
+    }
+
+    private async Task SalvarAsync()
+    {
+        if (_draft is null)
+            return;
+
+        _salvando = true;
+        _erro = null;
+        _mensagem = null;
+
+        try
+        {
+            var salvo = await Api.SalvarPersonagemAsync(_draft);
+            _draft = salvo.Clone();
+            _editando = false;
+            _draft = null;
+            _mensagem = $"Salvo às {DateTime.Now:HH:mm}";
+            await Sync.RefreshAsync();
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível salvar: {ex.Message}";
+        }
+        finally
+        {
+            _salvando = false;
+        }
+    }
+
+    private async Task RolarStatusAsync(StatusRollRequest pedido)
+    {
+        if (_draft is null)
+            return;
+
+        _erro = null;
+        _mensagem = null;
+
+        try
+        {
+            var resultados = _rollerEngine.RollCommand($"{pedido.Expressao} {pedido.Rotulo}");
+            var total = (int)Math.Round(resultados[0].Total);
+
+            switch (pedido.Status)
+            {
+                case StatusKind.Vida:
+                    _draft.Vida = total;
+                    break;
+                case StatusKind.Postura:
+                    _draft.Postura = total;
+                    break;
+                case StatusKind.Stamina:
+                    _draft.Stamina = total;
+                    break;
+            }
+
+            await Api.SalvarRolagemAsync(_draft.Nome, _draft.Id, resultados);
+            var salvo = await Api.SalvarPersonagemAsync(_draft);
+            _draft = salvo.Clone();
+            _mensagem = $"{pedido.Status} rolado e salvo";
+            await Sync.RefreshAsync();
+        }
+        catch (DiceRollException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível rolar: {ex.Message}";
+        }
+    }
+
+    private async Task RolarPericiaAsync(SkillRollRequest pedido)
+    {
+        if (_draft is null)
+            return;
+
+        _erro = null;
+        _mensagem = null;
+
+        try
+        {
+            var resultados = _rollerEngine.RollCommand($"{pedido.Expressao} {pedido.Nome}");
+            await Api.SalvarRolagemAsync(_draft.Nome, _draft.Id, resultados);
+            _mensagem = $"{pedido.Nome} rolado";
+            await Sync.RefreshAsync();
+        }
+        catch (DiceRollException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (GameApiException ex)
+        {
+            _erro = $"A rolagem foi calculada, mas não foi registrada: {ex.Message}";
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível rolar: {ex.Message}";
+        }
+    }
+
+    private async Task ExcluirAsync()
+    {
+        if (Servidor is null)
+            return;
+
+        _erro = null;
+        try
+        {
+            await Api.ExcluirPersonagemAsync(Servidor.Id);
+            await Sync.RefreshAsync();
+            _confirmarExclusao = false;
+            _editando = false;
+            _draft = null;
+
+            if (Personagens.Count > 0)
+                Nav.NavigateTo($"fichas/{Personagens[0].Id}", replace: true);
+            else
+                Nav.NavigateTo("fichas", replace: true);
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível excluir: {ex.Message}";
+        }
+    }
+
+    private async Task AtualizarAsync() => await Sync.RefreshAsync();
+
+    private void AbrirNova()
+    {
+        if (_modalNova)
+            return;
+
+        _novoUsuarioId = Jogadores.FirstOrDefault()?.Id ?? "";
+        _novoNome = "";
+        _novaClasse = "";
+        _novaRaca = "";
+        _erroNova = null;
+        _modalNova = true;
+    }
+
+    private void FecharNova()
+    {
+        _modalNova = false;
+        _erroNova = null;
+    }
+
+    private async Task CriarFichaAsync()
+    {
+        _erroNova = null;
+
+        if (string.IsNullOrWhiteSpace(_novoNome) || _novoNome.Trim().Length < 2)
+        {
+            _erroNova = "Dê um nome ao personagem.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_novoUsuarioId))
+        {
+            _erroNova = "Selecione o jogador dono da ficha.";
+            return;
+        }
+
+        _criando = true;
+        try
+        {
+            var criada = await Api.CriarPersonagemAsync(
+                _novoNome.Trim(), _novaClasse.Trim(), _novaRaca.Trim(), _novoUsuarioId);
+
+            await Sync.RefreshAsync();
+            _modalNova = false;
+            _editando = false;
+            _draft = null;
+            Nav.NavigateTo($"fichas/{criada.Id}", replace: true);
+        }
+        catch (GameApiException ex)
+        {
+            _erroNova = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erroNova = $"Não foi possível criar a ficha: {ex.Message}";
+        }
+        finally
+        {
+            _criando = false;
+        }
+    }
+
+    private string Dono(string usuarioId) =>
+        (Sync.State?.Usuarios ?? []).FirstOrDefault(u => u.Id == usuarioId)?.Nome ?? "Jogador";
+
+    private string Link(string caminho) => Nav.BaseUri + caminho.TrimStart('/');
+
+    private static string Inicial(string? nome) =>
+        string.IsNullOrWhiteSpace(nome) ? "?" : nome.Trim()[..1].ToUpperInvariant();
+
+    public void Dispose() => Sync.Changed -= OnSyncChanged;
+}

@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GatesOfHell.Master/GatesOfHell.Master.csproj" />
+    <Project Path="src/GatesOfHell.Players/GatesOfHell.Players.csproj" />
+    <Project Path="src/GatesOfHell.Shared/GatesOfHell.Shared.csproj" />
+  </Folder>
+</Solution>

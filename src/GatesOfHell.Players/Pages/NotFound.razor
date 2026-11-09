@@ -1,0 +1,19 @@
+@page "/not-found"
+@layout MainLayout
+@inject NavigationManager Nav
+
+<PageTitle>Página perdida — Gates of Hell</PageTitle>
+
+<div class="onboarding">
+    <span class="eyebrow">Erro 404</span>
+    <h1>Este corredor não existe.</h1>
+    <p>A página que você procurava se perdeu em algum lugar entre os portões.</p>
+    <div class="onboarding__actions">
+        <a class="btn btn--primary" href="@Link("ficha")"><Icon Name="scroll" Size="16" /> Voltar para a ficha</a>
+        <a class="btn btn--ghost" href="@Link("rolagens")"><Icon Name="d20" Size="16" /> Ver rolagens</a>
+    </div>
+</div>
+
+@code {
+    private string Link(string caminho) => Nav.BaseUri + caminho.TrimStart('/');
+}

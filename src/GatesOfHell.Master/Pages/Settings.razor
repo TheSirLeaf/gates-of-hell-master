@@ -1,0 +1,251 @@
+@page "/config"
+@inject AuthService Auth
+@inject AppSettings Conexao
+@inject GameApiClient Api
+@inject GameSyncService Sync
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Configurações — Gates of Hell</PageTitle>
+
+<header class="page-head">
+    <div class="page-head__main">
+        <span class="eyebrow">Mesa</span>
+        <h1>Configurações</h1>
+        <p class="page-sub">
+            Ajustes da campanha e da conexão com a planilha.
+            Somente o mestre pode alterar estes valores.
+        </p>
+    </div>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="alert alert--warn content-alert">
+        <Icon Name="alert" Size="17" />
+        <span>@_erro</span>
+    </div>
+}
+
+<div class="settings-grid">
+    <div class="settings-main">
+        <section class="card">
+            <div class="section-head">
+                <div>
+                    <div class="eyebrow">Campanha</div>
+                    <h2 class="section-title">Regras da mesa</h2>
+                </div>
+            </div>
+
+            <div class="form-grid">
+                <label class="field">
+                    <span>Nome da campanha</span>
+                    <input class="input" @bind="_config.NomeCampanha" maxlength="80" />
+                </label>
+            </div>
+
+            <p class="hint">
+                Testes de atributo rolam <code>Nd20kh1</code>, em que <code>N</code> é o
+                valor do atributo (mínimo 1). Perícias somam o valor delas ao resultado:
+                Luta com Físico 3 e Luta 2 rola <code>3d20kh1+2</code>. Vida e Stamina
+                também somam o valor da classe.
+            </p>
+
+            @if (!string.IsNullOrWhiteSpace(_mensagem))
+            {
+                <div class="alert">
+                    <Icon Name="check" Size="16" />
+                    <span>@_mensagem</span>
+                </div>
+            }
+
+            <div class="form-actions">
+                <button type="button" class="btn btn--primary" @onclick="SalvarAsync" disabled="@_salvando">
+                    @if (_salvando)
+                    {
+                        <span class="spinner spinner--sm"></span>
+                    }
+                    else
+                    {
+                        <Icon Name="save" Size="15" />
+                    }
+                    Salvar configurações
+                </button>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="section-head">
+                <div>
+                    <div class="eyebrow">Conexão</div>
+                    <h2 class="section-title">Web App do Apps Script</h2>
+                </div>
+                <span class="live live--ligado"><span class="live__dot"></span>conectado</span>
+            </div>
+
+            <div class="connection-url">
+                <Icon Name="link" Size="16" />
+                <code>@Conexao.ApiUrl</code>
+            </div>
+
+            <p class="hint">
+                Esta URL é a implantação <code>/exec</code> do projeto em <code>apps-script/Code.gs</code>.
+                A planilha fica privada na sua conta Google; o Web App é a única porta de entrada.
+            </p>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn--ghost btn--sm" @onclick="TrocarConexaoAsync">
+                    <Icon Name="logout" Size="14" /> Trocar Web App (sai da sessão)
+                </button>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="eyebrow">Perigo</div>
+            <h2 class="section-title">Histórico de rolagens</h2>
+            <p class="hint">
+                A limpeza do histórico é feita na página de rolagens, com confirmação.
+                Ela não apaga fichas, itens ou monstros.
+            </p>
+            <div class="form-actions">
+                <a class="btn btn--ghost btn--sm" href="@Link("rolagens")"><Icon Name="d20" Size="14" /> Ir para rolagens</a>
+            </div>
+        </section>
+    </div>
+
+    <aside class="settings-side">
+        <section class="card">
+            <div class="eyebrow">Como funciona</div>
+            <h2 class="section-title">Por baixo do capuz</h2>
+            <ul class="info-list">
+                <li>
+                    <Icon Name="scroll" Size="16" />
+                    <span>Os dados ficam em uma planilha Google criada pela função <code>setup()</code> do Apps Script.</span>
+                </li>
+                <li>
+                    <Icon Name="refresh" Size="16" />
+                    <span>Os dois apps consultam o Web App a cada 5 segundos para manter a mesa ao vivo.</span>
+                </li>
+                <li>
+                    <Icon Name="d20" Size="16" />
+                    <span>As rolagens usam o motor Rollem V1 no navegador e são registradas na planilha.</span>
+                </li>
+                <li>
+                    <Icon Name="lock" Size="16" />
+                    <span>Senhas são guardadas com sal e hash SHA-256; o código de mestre fica no Apps Script.</span>
+                </li>
+            </ul>
+        </section>
+
+        <section class="card">
+            <div class="eyebrow">Atenção</div>
+            <h2 class="section-title">Limites do Google</h2>
+            <p class="hint">
+                O Apps Script tem cotas de execução diária. O polling curto foi pensado para
+                mesas pequenas; se a mesa crescer, aumente o intervalo em
+                <code>GameSyncService</code> ou hospede uma API própria.
+            </p>
+            <p class="hint">
+                O login é básico, para uma mesa entre amigos — não use este projeto para
+                dados sensíveis ou multidões.
+            </p>
+        </section>
+
+        <section class="card">
+            <div class="eyebrow">Segurança</div>
+            <h2 class="section-title">Antes de publicar</h2>
+            <ol class="info-steps">
+                <li>Troque <code>MESTRE_CODE</code> no topo de <code>Code.gs</code>.</li>
+                <li>Rode <code>setup()</code> e publique o Web App como “qualquer pessoa”.</li>
+                <li>Nunca compartilhe a planilha publicamente; compartilhe só a URL <code>/exec</code>.</li>
+            </ol>
+        </section>
+    </aside>
+</div>
+
+@code {
+    private Config _config = new();
+    private bool _salvando;
+    private bool _configCarregada;
+    private string? _mensagem;
+    private string? _erro;
+
+    private string Link(string caminho) => Nav.BaseUri + caminho.TrimStart('/');
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+        if (!Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("login");
+            return;
+        }
+
+        if (!Auth.IsMaster)
+            return;
+
+        Sync.Changed += OnSyncChanged;
+        Sync.Start();
+        await Sync.RefreshAsync();
+        CarregarConfig();
+    }
+
+    private void OnSyncChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (!_configCarregada)
+                CarregarConfig();
+
+            StateHasChanged();
+        });
+    }
+
+    private void CarregarConfig()
+    {
+        if (Sync.State?.Config is { } config)
+        {
+            _config = config.Clone();
+            _configCarregada = true;
+        }
+    }
+
+    private async Task SalvarAsync()
+    {
+        _erro = null;
+        _mensagem = null;
+
+        if (string.IsNullOrWhiteSpace(_config.NomeCampanha))
+            _config.NomeCampanha = "Gates of Hell";
+
+        _salvando = true;
+        try
+        {
+            var salvo = await Api.SalvarConfigAsync(_config);
+            _config = salvo.Clone();
+            _mensagem = "Configurações salvas.";
+            await Sync.RefreshAsync();
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível salvar: {ex.Message}";
+        }
+        finally
+        {
+            _salvando = false;
+        }
+    }
+
+    private async Task TrocarConexaoAsync()
+    {
+        Sync.Stop();
+        await Auth.LogoutAsync();
+        Nav.NavigateTo("login");
+    }
+
+    public void Dispose() => Sync.Changed -= OnSyncChanged;
+}

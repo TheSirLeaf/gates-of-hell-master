@@ -1,0 +1,74 @@
+name: Deploy para GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Escolher o app pelo nome do repositório
+        shell: bash
+        run: |
+          repo="${GITHUB_REPOSITORY##*/}"
+          case "$repo" in
+            gates-of-hell-players) app="src/GatesOfHell.Players" ;;
+            gates-of-hell-master) app="src/GatesOfHell.Master" ;;
+            *)
+              echo "Repositório inesperado: $repo" >&2
+              echo "Esperado gates-of-hell-players ou gates-of-hell-master." >&2
+              exit 1
+              ;;
+          esac
+
+          echo "APP=$app" >> "$GITHUB_ENV"
+          echo "PAGES_BASE=/$repo/" >> "$GITHUB_ENV"
+
+      - name: Publicar Blazor WebAssembly
+        run: dotnet publish "$APP" -c Release -o site
+
+      - name: Ajustar caminho base e fallback de rotas
+        shell: bash
+        run: |
+          sed -i "s|<base href=\"/\" />|<base href=\"${PAGES_BASE}\" />|" site/wwwroot/index.html
+          cp site/wwwroot/index.html site/wwwroot/404.html
+          touch site/wwwroot/.nojekyll
+          grep -F "<base href=\"${PAGES_BASE}\" />" site/wwwroot/index.html
+
+      - name: Configurar Pages
+        uses: actions/configure-pages@v5
+
+      - name: Empacotar site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/wwwroot
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Publicar no GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

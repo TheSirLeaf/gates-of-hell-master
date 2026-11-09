@@ -1,0 +1,18 @@
+@{
+    var estado = Error is not null ? "erro" : IsLive ? "ligado" : "pausado";
+    var texto = Error is not null ? "Reconectando" : IsLive ? "Ao vivo" : "Pausado";
+}
+<span class="live live--@estado" title="@(Error ?? "Sincronizando a cada 5 segundos")">
+    <span class="live__dot"></span>
+    <span class="live__text">@texto</span>
+    @if (LastSync is not null)
+    {
+        <span class="live__meta">@LastSync.Value.ToLocalTime().ToString("HH:mm:ss")</span>
+    }
+</span>
+
+@code {
+    [Parameter] public bool IsLive { get; set; }
+    [Parameter] public DateTimeOffset? LastSync { get; set; }
+    [Parameter] public string? Error { get; set; }
+}

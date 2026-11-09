@@ -1,0 +1,297 @@
+@inject GameApiClient Api
+
+<section class="card inventory">
+    <div class="section-head">
+        <div>
+            <div class="eyebrow">Inventário</div>
+            <h2 class="section-title">Itens, equipamentos e habilidades</h2>
+        </div>
+        @if (Editable)
+        {
+            <button type="button" class="btn btn--ghost btn--sm" @onclick="AbrirNovo">
+                <Icon Name="plus" Size="15" />
+                Adicionar
+            </button>
+        }
+    </div>
+
+    @if (!Editable)
+    {
+        <p class="hint">Itens, equipamentos e habilidades são cadastrados pelo mestre.</p>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="alert alert--warn">
+            <Icon Name="alert" Size="16" />
+            <span>@_erro</span>
+        </div>
+    }
+
+    @if (_formAberto)
+    {
+        <form class="inventory-form">
+            <div class="section-head section-head--tight">
+                <h3 class="inventory-form__title">@(_editandoId is null ? "Novo registro" : "Editar registro")</h3>
+                <button type="button" class="icon-btn" title="Fechar" @onclick="FecharForm"><Icon Name="close" Size="16" /></button>
+            </div>
+
+            <div class="form-grid form-grid--3">
+                <label class="field">
+                    <span>Tipo</span>
+                    <select class="input" @bind="_form.Tipo">
+                        @foreach (var tipo in ItemTipos.Todos)
+                        {
+                            <option value="@tipo">@tipo</option>
+                        }
+                    </select>
+                </label>
+                <label class="field field--wide">
+                    <span>Nome</span>
+                    <input class="input" @bind="_form.Nome" maxlength="80" placeholder="Ex.: Armadura de couro" />
+                </label>
+                <label class="field">
+                    <span>Valor / bônus</span>
+                    <input class="input" type="number" step="1" @bind="_form.Valor" />
+                </label>
+                <label class="field">
+                    <span>Quantidade</span>
+                    <input class="input" type="number" min="1" max="999" @bind="_form.Quantidade" />
+                </label>
+                @if (_form.Tipo == ItemTipos.Equipamento)
+                {
+                    <label class="check">
+                        <input type="checkbox" @bind="_form.Equipado" />
+                        <span>Equipado</span>
+                    </label>
+                }
+            </div>
+
+            <label class="field">
+                <span>Descrição</span>
+                <textarea class="input textarea" rows="3" maxlength="2000" @bind="_form.Descricao" placeholder="Efeito, peso, história..."></textarea>
+            </label>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn--ghost" @onclick="FecharForm">Cancelar</button>
+                <button type="button" class="btn btn--primary" disabled="@_salvando" @onclick="SalvarAsync">
+                    @if (_salvando)
+                    {
+                        <span class="spinner spinner--sm"></span>
+                    }
+                    else
+                    {
+                        <Icon Name="save" Size="15" />
+                    }
+                    Salvar
+                </button>
+            </div>
+        </form>
+    }
+
+    @if (Itens.Count == 0)
+    {
+        <div class="empty empty--small">
+            <Icon Name="scroll" Size="24" />
+            <p>@(Editable ? "Nada cadastrado para esta ficha ainda." : "O mestre ainda não entregou nada a esta ficha.")</p>
+        </div>
+    }
+    else
+    {
+        @foreach (var grupo in Agrupados)
+        {
+            <div class="inventory-group">
+                <h3 class="inventory-group__title">
+                    @grupo.Tipo
+                    <span>@grupo.Itens.Count</span>
+                </h3>
+
+                <div class="inventory-grid">
+                    @foreach (var item in grupo.Itens)
+                    {
+                        <article class="inventory-item">
+                            <div class="inventory-item__icon">
+                                <Icon Name="@Icone(item.Tipo)" Size="20" />
+                            </div>
+                            <div class="inventory-item__main">
+                                <div class="inventory-item__title">
+                                    <strong>@item.Nome</strong>
+                                    @if (item.Equipado)
+                                    {
+                                        <span class="badge badge--equipped">equipado</span>
+                                    }
+                                    @if (item.Quantidade > 1)
+                                    {
+                                        <span class="chip chip--tiny">×@item.Quantidade</span>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(item.Descricao))
+                                {
+                                    <p class="inventory-item__desc">@item.Descricao</p>
+                                }
+                                @if (item.Valor != 0)
+                                {
+                                    <span class="inventory-item__value">
+                                        @(item.Tipo == ItemTipos.Equipamento ? "Resistência" : "Valor")
+                                        <strong>@Valor(item.Valor)</strong>
+                                    </span>
+                                }
+                            </div>
+                            @if (Editable)
+                            {
+                                <div class="inventory-item__actions">
+                                    @if (_pendenteExclusao == item.Id)
+                                    {
+                                        <button type="button" class="btn btn--danger btn--xs" @onclick="() => ExcluirAsync(item)">Excluir</button>
+                                        <button type="button" class="btn btn--ghost btn--xs" @onclick="() => _pendenteExclusao = null">Não</button>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class="icon-btn" title="Editar" @onclick="() => Editar(item)">
+                                            <Icon Name="edit" Size="14" />
+                                        </button>
+                                        <button type="button" class="icon-btn" title="Excluir" @onclick="() => _pendenteExclusao = item.Id">
+                                            <Icon Name="trash" Size="14" />
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </article>
+                    }
+                </div>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public string PersonagemId { get; set; } = "";
+    [Parameter] public IReadOnlyList<ItemInventario> Itens { get; set; } = Array.Empty<ItemInventario>();
+    [Parameter] public bool Editable { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private ItemInventario _form = new();
+    private string? _editandoId;
+    private string? _pendenteExclusao;
+    private string? _erro;
+    private bool _formAberto;
+    private bool _salvando;
+
+    private IReadOnlyList<(string Tipo, List<ItemInventario> Itens)> Agrupados =>
+        ItemTipos.Todos
+            .Select(tipo => (tipo, Itens.Where(i => i.Tipo == tipo).OrderBy(i => i.Nome).ToList()))
+            .Where(grupo => grupo.Item2.Count > 0)
+            .Select(grupo => (grupo.tipo, grupo.Item2))
+            .ToList();
+
+    private void AbrirNovo()
+    {
+        if (string.IsNullOrWhiteSpace(PersonagemId))
+            return;
+
+        _form = new ItemInventario
+        {
+            PersonagemId = PersonagemId,
+            Tipo = ItemTipos.Equipamento,
+            Quantidade = 1
+        };
+        _editandoId = null;
+        _formAberto = true;
+        _erro = null;
+    }
+
+    private void Editar(ItemInventario item)
+    {
+        _form = new ItemInventario
+        {
+            Id = item.Id,
+            PersonagemId = item.PersonagemId,
+            Tipo = item.Tipo,
+            Nome = item.Nome,
+            Descricao = item.Descricao,
+            Valor = item.Valor,
+            Quantidade = item.Quantidade,
+            Equipado = item.Equipado
+        };
+        _editandoId = item.Id;
+        _formAberto = true;
+        _erro = null;
+    }
+
+    private void FecharForm()
+    {
+        _formAberto = false;
+        _editandoId = null;
+        _erro = null;
+    }
+
+    private async Task SalvarAsync()
+    {
+        _erro = null;
+
+        if (string.IsNullOrWhiteSpace(_form.Nome))
+        {
+            _erro = "Dê um nome ao item.";
+            return;
+        }
+
+        if (_form.Quantidade < 1)
+            _form.Quantidade = 1;
+
+        _form.PersonagemId = PersonagemId;
+        _form.Valor = Math.Max(0, _form.Valor);
+
+        _salvando = true;
+        try
+        {
+            await Api.SalvarItemAsync(_form);
+            _formAberto = false;
+            _editandoId = null;
+            await OnChanged.InvokeAsync();
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível salvar: {ex.Message}";
+        }
+        finally
+        {
+            _salvando = false;
+        }
+    }
+
+    private async Task ExcluirAsync(ItemInventario item)
+    {
+        _pendenteExclusao = null;
+        _erro = null;
+
+        try
+        {
+            await Api.ExcluirItemAsync(item.Id);
+            await OnChanged.InvokeAsync();
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível excluir: {ex.Message}";
+        }
+    }
+
+    private static string Icone(string tipo) => tipo switch
+    {
+        ItemTipos.Equipamento => "shield",
+        ItemTipos.Habilidade => "spark",
+        _ => "scroll"
+    };
+
+    private static string Valor(double valor) =>
+        Math.Abs(valor - Math.Round(valor)) < 0.000001
+            ? ((long)Math.Round(valor)).ToString(CultureInfo.InvariantCulture)
+            : valor.ToString("0.##", CultureInfo.InvariantCulture);
+}

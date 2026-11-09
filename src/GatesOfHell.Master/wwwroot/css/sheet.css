@@ -1,0 +1,107 @@
+/* Gates of Hell — app dos jogadores: ficha e rolagens */
+.sheet-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 20px;
+    align-items: start;
+}
+
+.sheet-layout__main {
+    display: grid;
+    gap: 18px;
+    min-width: 0;
+}
+
+.sheet-layout__aside {
+    position: sticky;
+    top: 74px;
+    display: grid;
+    gap: 18px;
+    min-width: 0;
+}
+
+.rolls-layout {
+    display: grid;
+    grid-template-columns: 390px minmax(0, 1fr);
+    gap: 18px;
+    align-items: start;
+}
+
+.rolls-layout__side {
+    display: grid;
+    gap: 18px;
+    min-width: 0;
+}
+
+.card--tight {
+    padding: 16px;
+}
+
+.feed-card {
+    min-width: 0;
+}
+
+.syntax-list {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+}
+
+    .syntax-list > div {
+        display: grid;
+        grid-template-columns: 118px minmax(0, 1fr);
+        gap: 9px;
+        align-items: baseline;
+    }
+
+    .syntax-list dt {
+        margin: 0;
+    }
+
+        .syntax-list dt code {
+            white-space: nowrap;
+            font-size: 10.5px;
+        }
+
+    .syntax-list dd {
+        margin: 0;
+        font-size: 11px;
+        line-height: 1.45;
+        color: var(--muted);
+    }
+
+.modal .form-grid {
+    gap: 12px;
+}
+
+@media (max-width: 1220px) {
+    .sheet-layout {
+        grid-template-columns: minmax(0, 1fr) 330px;
+    }
+}
+
+@media (max-width: 1120px) {
+    .sheet-layout,
+    .rolls-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .sheet-layout__aside {
+        position: static;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+    }
+}
+
+@media (max-width: 760px) {
+    .sheet-layout__aside {
+        grid-template-columns: 1fr;
+    }
+
+    .syntax-list > div {
+        grid-template-columns: 1fr;
+        gap: 1px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid rgba(45, 35, 32, .5);
+    }
+}

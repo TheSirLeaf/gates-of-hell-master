@@ -1,0 +1,384 @@
+@page "/monstros"
+@inject AuthService Auth
+@inject GameApiClient Api
+@inject GameSyncService Sync
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Bestiário — Gates of Hell</PageTitle>
+
+<header class="page-head">
+    <div class="page-head__main">
+        <span class="eyebrow">Bestiário</span>
+        <h1>Monstros</h1>
+        <p class="page-sub">
+            Crie e ajuste as criaturas da mesa. A vida, os atributos e as notas ficam
+            salvos na planilha e disponíveis para as rolagens do mestre.
+        </p>
+    </div>
+    <div class="page-head__actions">
+        <button type="button" class="btn btn--primary" @onclick="NovoMonstro">
+            <Icon Name="plus" Size="16" /> Novo monstro
+        </button>
+    </div>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="alert alert--warn content-alert">
+        <Icon Name="alert" Size="17" />
+        <span>@_erro</span>
+    </div>
+}
+
+<div class="monster-layout">
+    <aside class="monster-list card">
+        <div class="section-head section-head--tight">
+            <div>
+                <div class="eyebrow">Criaturas</div>
+                <h2 class="section-title">@Monstros.Count</h2>
+            </div>
+        </div>
+
+        @if (Monstros.Count == 0)
+        {
+            <div class="empty empty--small">
+                <Icon Name="skull" Size="24" />
+                <p>O bestiário está vazio. Toda mesa precisa de um primeiro monstro.</p>
+            </div>
+        }
+        else
+        {
+            <div class="monster-list__items">
+                @foreach (var monstro in Monstros)
+                {
+                    <button type="button" class="monster-card @(monstro.Id == _draft?.Id ? "monster-card--active" : "")"
+                            @onclick="() => Selecionar(monstro)">
+                        <span class="monster-card__top">
+                            <span class="monster-card__icon"><Icon Name="skull" Size="17" /></span>
+                            <strong>@monstro.Nome</strong>
+                            <span class="monster-card__hp">@monstro.Vida/@monstro.VidaMax</span>
+                        </span>
+                        <span class="hp-bar"><span class="hp-bar__fill" style="width:@LarguraVida(monstro)"></span></span>
+                        <span class="monster-card__stats">
+                            Fís @monstro.Fisico · Men @monstro.Mental · Esp @monstro.Espiritual
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+    </aside>
+
+    <div class="monster-main">
+        @if (_draft is not { } selecionado)
+        {
+            <div class="empty empty--large">
+                <Icon Name="skull" Size="28" />
+                <p>Selecione uma criatura ou crie um novo monstro para a mesa.</p>
+                <button type="button" class="btn btn--primary btn--sm" @onclick="NovoMonstro">
+                    <Icon Name="plus" Size="15" /> Criar monstro
+                </button>
+            </div>
+        }
+        else
+        {
+            <section class="card monster-form-card">
+                <div class="section-head">
+                    <div>
+                        <div class="eyebrow">@(_novo ? "Nova criatura" : "Ficha do monstro")</div>
+                        <h2 class="section-title">@(string.IsNullOrWhiteSpace(selecionado.Nome) ? "Sem nome" : selecionado.Nome)</h2>
+                    </div>
+                    @if (!_novo)
+                    {
+                        <span class="monster-form-card__hp">
+                            <Icon Name="heart" Size="14" />
+                            @selecionado.Vida / @selecionado.VidaMax
+                        </span>
+                    }
+                </div>
+
+                <div class="form-grid form-grid--3">
+                    <label class="field field--wide">
+                        <span>Nome</span>
+                        <input class="input" @bind="_draft.Nome" maxlength="80" placeholder="Ex.: Carniçal do portão" />
+                    </label>
+                    <label class="field">
+                        <span>Vida atual</span>
+                        <input class="input" type="number" @bind="_draft.Vida" />
+                    </label>
+                    <label class="field">
+                        <span>Vida máxima</span>
+                        <input class="input" type="number" @bind="_draft.VidaMax" />
+                    </label>
+                    <label class="field">
+                        <span>Postura</span>
+                        <input class="input" type="number" @bind="_draft.Postura" />
+                    </label>
+                    <label class="field">
+                        <span>Stamina</span>
+                        <input class="input" type="number" @bind="_draft.Stamina" />
+                    </label>
+                    <label class="field">
+                        <span>Resistência</span>
+                        <input class="input" type="number" @bind="_draft.Resistencia" />
+                    </label>
+                    <label class="field">
+                        <span>Físico</span>
+                        <input class="input" type="number" min="0" @bind="_draft.Fisico" />
+                    </label>
+                    <label class="field">
+                        <span>Mental</span>
+                        <input class="input" type="number" min="0" @bind="_draft.Mental" />
+                    </label>
+                    <label class="field">
+                        <span>Espiritual</span>
+                        <input class="input" type="number" min="0" @bind="_draft.Espiritual" />
+                    </label>
+                </div>
+
+                <label class="field" style="margin-top:14px">
+                    <span>Notas</span>
+                    <textarea class="input textarea" rows="4" maxlength="2000" @bind="_draft.Notas"
+                              placeholder="Ataques, resistências, fraquezas, o que o mestre precisar lembrar..."></textarea>
+                </label>
+
+                @if (!string.IsNullOrWhiteSpace(_mensagem))
+                {
+                    <span class="save-state" style="margin-top:12px"><Icon Name="check" Size="14" /> @_mensagem</span>
+                }
+
+                <div class="form-actions form-actions--split">
+                    @if (!_novo)
+                    {
+                        @if (_confirmarExclusao)
+                        {
+                            <span class="delete-confirm">
+                                <button type="button" class="btn btn--danger btn--sm" @onclick="ExcluirAsync">Confirmar exclusão</button>
+                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => _confirmarExclusao = false">Não</button>
+                            </span>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn--ghost btn--sm" @onclick="() => _confirmarExclusao = true">
+                                <Icon Name="trash" Size="14" /> Excluir
+                            </button>
+                        }
+                    }
+                    <span class="form-actions__spacer"></span>
+                    <button type="button" class="btn btn--ghost" @onclick="NovoMonstro">Novo</button>
+                    <button type="button" class="btn btn--primary" @onclick="SalvarAsync" disabled="@_salvando">
+                        @if (_salvando)
+                        {
+                            <span class="spinner spinner--sm"></span>
+                        }
+                        else
+                        {
+                            <Icon Name="save" Size="15" />
+                        }
+                        Salvar monstro
+                    </button>
+                </div>
+            </section>
+
+            <div class="monster-side">
+                <DiceRollerPanel @ref="_roller"
+                                 Contexto="@ContextoRolagem"
+                                 Placeholder="Ex.: d20+5 ataque"
+                                 OnRolled="AtualizarAsync" />
+
+                <section class="card">
+                    <div class="eyebrow">Rolagens rápidas</div>
+                    <h2 class="section-title">Para esta criatura</h2>
+                    <p class="hint">
+                        Abre o rolador com um teste de Físico do monstro
+                        (<code>Nd20kh1</code>, mínimo 1d20).
+                    </p>
+                    <div class="quick-rolls">
+                        <button type="button" class="btn btn--ghost btn--sm" @onclick="RolarFisico">
+                            <Icon Name="d20" Size="14" /> Físico
+                        </button>
+                        <button type="button" class="btn btn--ghost btn--sm" @onclick="RolarD20">
+                            <Icon Name="d20" Size="14" /> d20
+                        </button>
+                        <button type="button" class="btn btn--ghost btn--sm" @onclick="RolarDano">
+                            <Icon Name="sword" Size="14" /> 2d6 dano
+                        </button>
+                    </div>
+                </section>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private Monstro? _draft;
+    private DiceRollerPanel? _roller;
+    private bool _novo;
+    private bool _salvando;
+    private bool _confirmarExclusao;
+    private string? _mensagem;
+    private string? _erro;
+
+    private IReadOnlyList<Monstro> Monstros =>
+        (Sync.State?.Monstros ?? [])
+        .OrderBy(m => m.Nome, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    private string ContextoRolagem =>
+        string.IsNullOrWhiteSpace(_draft?.Nome) ? "Monstros" : $"Monstro: {_draft.Nome}";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+        if (!Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("login");
+            return;
+        }
+
+        if (!Auth.IsMaster)
+            return;
+
+        Sync.Changed += OnSyncChanged;
+        Sync.Start();
+        await Sync.RefreshAsync();
+
+        if (Monstros.Count > 0)
+            Selecionar(Monstros[0]);
+    }
+
+    private void OnSyncChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (_draft is null && Monstros.Count > 0 && !_novo)
+                Selecionar(Monstros[0]);
+            StateHasChanged();
+        });
+    }
+
+    private void Selecionar(Monstro monstro)
+    {
+        _draft = monstro.Clone();
+        _novo = false;
+        _mensagem = null;
+        _erro = null;
+        _confirmarExclusao = false;
+    }
+
+    private void NovoMonstro()
+    {
+        _draft = new Monstro
+        {
+            Vida = 10,
+            VidaMax = 10,
+            Fisico = 1,
+            Mental = 1,
+            Espiritual = 1
+        };
+        _novo = true;
+        _mensagem = null;
+        _erro = null;
+        _confirmarExclusao = false;
+    }
+
+    private async Task SalvarAsync()
+    {
+        if (_draft is null)
+            return;
+
+        _erro = null;
+        _mensagem = null;
+
+        if (string.IsNullOrWhiteSpace(_draft.Nome))
+        {
+            _erro = "Dê um nome ao monstro.";
+            return;
+        }
+
+        _draft.VidaMax = Math.Max(0, _draft.VidaMax);
+        _draft.Vida = Math.Clamp(_draft.Vida, 0, Math.Max(_draft.VidaMax, 0));
+        _draft.Postura = Math.Max(0, _draft.Postura);
+        _draft.Stamina = Math.Max(0, _draft.Stamina);
+        _draft.Resistencia = Math.Max(0, _draft.Resistencia);
+
+        _salvando = true;
+        try
+        {
+            var salvo = await Api.SalvarMonstroAsync(_draft);
+            _draft = salvo.Clone();
+            _novo = false;
+            _mensagem = $"Salvo às {DateTime.Now:HH:mm}";
+            await Sync.RefreshAsync();
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível salvar o monstro: {ex.Message}";
+        }
+        finally
+        {
+            _salvando = false;
+        }
+    }
+
+    private async Task ExcluirAsync()
+    {
+        if (_draft is null || _novo)
+            return;
+
+        _erro = null;
+        try
+        {
+            await Api.ExcluirMonstroAsync(_draft.Id);
+            await Sync.RefreshAsync();
+            _draft = null;
+            _confirmarExclusao = false;
+
+            if (Monstros.Count > 0)
+                Selecionar(Monstros[0]);
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível excluir: {ex.Message}";
+        }
+    }
+
+    private async Task AtualizarAsync() => await Sync.RefreshAsync();
+
+    private void RolarFisico()
+    {
+        if (_draft is null)
+            return;
+
+        _roller?.Prefill($"{Testes.Expressao(_draft.Fisico)} Físico — {_draft.Nome}");
+    }
+
+    private void RolarD20() => _roller?.Prefill("d20");
+
+    private void RolarDano()
+    {
+        if (_draft is null)
+            return;
+
+        _roller?.Prefill($"2d6 dano — {_draft.Nome}");
+    }
+
+    private static string LarguraVida(Monstro monstro)
+    {
+        if (monstro.VidaMax <= 0)
+            return "0%";
+
+        var percentual = Math.Clamp(monstro.Vida * 100.0 / monstro.VidaMax, 0, 100);
+        return percentual.ToString("0.#", CultureInfo.InvariantCulture) + "%";
+    }
+
+    public void Dispose() => Sync.Changed -= OnSyncChanged;
+}

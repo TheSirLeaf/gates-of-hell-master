@@ -1,0 +1,174 @@
+@page "/rolagens"
+@inject AuthService Auth
+@inject GameSyncService Sync
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Rolagens — Gates of Hell</PageTitle>
+
+<header class="page-head">
+    <div class="page-head__main">
+        <span class="eyebrow">A mesa</span>
+        <h1>Rolagens</h1>
+        <p class="page-sub">Cada dado da mesa, na ordem em que caiu. Sintaxe compatível com o Rollem V1.</p>
+    </div>
+    <div class="page-head__actions">
+        <button type="button" class="btn btn--ghost" @onclick="AtualizarAsync">
+            <Icon Name="refresh" Size="16" /> Atualizar
+        </button>
+    </div>
+</header>
+
+@if (_carregando)
+{
+    <div class="page-loading">
+        <span class="spinner"></span>
+        <span>Reunindo os dados...</span>
+    </div>
+}
+else
+{
+    <div class="rolls-layout">
+        <div class="rolls-layout__side">
+            @if (Personagens.Count > 0)
+            {
+                <section class="card card--tight">
+                    <label class="field">
+                        <span>Rolar como</span>
+                        <select class="input" @onchange="SelecionarPersonagem">
+                            @foreach (var personagem in Personagens)
+                            {
+                                <option value="@personagem.Id" selected="@(personagem.Id == _selecionadoId)">
+                                    @personagem.Nome@(string.IsNullOrWhiteSpace(personagem.Classe) ? "" : $" — {personagem.Classe}")
+                                </option>
+                            }
+                        </select>
+                    </label>
+                    <p class="hint">A rolagem fica ligada à ficha selecionada, mas todos veem o histórico.</p>
+                </section>
+            }
+
+            <DiceRollerPanel Contexto="@Contexto"
+                             PersonagemId="@PersonagemId"
+                             Placeholder="Ex.: [d20+5 ataque] [2d6+3 dano]"
+                             OnRolled="AtualizarAsync" />
+
+            <section class="card syntax-card">
+                <div class="section-head section-head--tight">
+                    <div>
+                        <div class="eyebrow">Referência</div>
+                        <h2 class="section-title">Sintaxe Rollem V1</h2>
+                    </div>
+                    <a class="text-button" href="https://rollem.rocks/docs/syntax" target="_blank" rel="noopener noreferrer">docs</a>
+                </div>
+
+                <dl class="syntax-list">
+                    <div>
+                        <dt><code>4d6</code></dt>
+                        <dd>quatro dados de seis lados</dd>
+                    </div>
+                    <div>
+                        <dt><code>d20+5</code></dt>
+                        <dd>dado com modificador</dd>
+                    </div>
+                    <div>
+                        <dt><code>4d6dl1</code></dt>
+                        <dd>descarta o menor (keep/drop: k, kh, kl, dh)</dd>
+                    </div>
+                    <div>
+                        <dt><code>2d6! dano</code></dt>
+                        <dd>dados explosivos, com rótulo</dd>
+                    </div>
+                    <div>
+                        <dt><code>6#4d6kh3</code></dt>
+                        <dd>repete e mantém os três maiores</dd>
+                    </div>
+                    <div>
+                        <dt><code>d20&gt;=15</code></dt>
+                        <dd>teste de sucesso ou falha</dd>
+                    </div>
+                    <div>
+                        <dt><code>10d6 &lt;&lt; 3</code></dt>
+                        <dd>conta quantos dados atingiram o limite</dd>
+                    </div>
+                    <div>
+                        <dt><code>dF</code></dt>
+                        <dd>dado Fate: −, 0 ou +</dd>
+                    </div>
+                    <div>
+                        <dt><code>[d20+5 ataque]</code></dt>
+                        <dd>rolagem inline com rótulo</dd>
+                    </div>
+                </dl>
+
+                <p class="hint">
+                    Também funcionam parênteses, multiplicação/divisão, <code>++</code>/<code>--</code>
+                    por dado, <code>!N</code> e crítico <code>cN</code>. Limite de 100 dados e 20 repetições.
+                </p>
+            </section>
+        </div>
+
+        <section class="card feed-card">
+            <div class="section-head section-head--tight">
+                <div>
+                    <div class="eyebrow">Histórico</div>
+                    <h2 class="section-title">A mesa inteira</h2>
+                </div>
+                <span class="section-note">@Rolagens.Count rolagens recentes</span>
+            </div>
+
+            <RollFeed Entries="Rolagens"
+                      EmptyText="Ninguém rolou nada ainda. Que tal abrir o portão?" />
+        </section>
+    </div>
+}
+
+@code {
+    private bool _carregando = true;
+    private string? _selecionadoId;
+
+    private IReadOnlyList<Personagem> Personagens =>
+        (Sync.State?.Personagens ?? [])
+        .OrderBy(p => p.Nome, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    private Personagem? Selecionado =>
+        Personagens.FirstOrDefault(p => p.Id == _selecionadoId) ?? Personagens.FirstOrDefault();
+
+    private string Contexto => Selecionado?.Nome ?? "Mesa";
+    private string? PersonagemId => Selecionado?.Id;
+    private IReadOnlyList<RollEntry> Rolagens => Sync.State?.Rolagens ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+        if (!Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("login");
+            return;
+        }
+
+        Sync.Changed += OnSyncChanged;
+        Sync.Start();
+        await Sync.RefreshAsync();
+
+        _selecionadoId ??= Personagens.FirstOrDefault()?.Id;
+        _carregando = false;
+    }
+
+    private void OnSyncChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            _selecionadoId ??= Personagens.FirstOrDefault()?.Id;
+            StateHasChanged();
+        });
+    }
+
+    private void SelecionarPersonagem(ChangeEventArgs args) =>
+        _selecionadoId = args.Value?.ToString();
+
+    private async Task AtualizarAsync() => await Sync.RefreshAsync();
+
+    public void Dispose() => Sync.Changed -= OnSyncChanged;
+}

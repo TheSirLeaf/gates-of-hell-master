@@ -1,0 +1,178 @@
+@inject GameApiClient Api
+
+<div class="roller @(Compact ? "roller--compact" : "")">
+    <div class="roller__head">
+        <div>
+            <div class="eyebrow">Rolador</div>
+            <h2 class="roller__title">Dados</h2>
+        </div>
+        <span class="roller__context">
+            <Icon Name="user" Size="14" />
+            <span>como</span>
+            <strong>@(string.IsNullOrWhiteSpace(Contexto) ? "Mesa" : Contexto)</strong>
+        </span>
+    </div>
+
+    <form class="roller__form" @onsubmit="RolarAsync" @onsubmit:preventDefault>
+        <div class="roller__input-row">
+            <input class="input roller__input"
+                   @bind="_entrada"
+                   @bind:event="oninput"
+                   placeholder="@Placeholder"
+                   autocomplete="off"
+                   spellcheck="false"
+                   aria-label="Expressão de rolagem" />
+            <button type="submit" class="btn btn--primary" disabled="@_enviando">
+                @if (_enviando)
+                {
+                    <span class="spinner spinner--sm"></span>
+                }
+                else
+                {
+                    <Icon Name="d20" Size="17" />
+                }
+                Rolar
+            </button>
+        </div>
+
+        <div class="roller__quick">
+            @foreach (var atalho in Atalhos)
+            {
+                <button type="button" class="chip chip--button" @onclick="() => _entrada = atalho.Expressao">
+                    @atalho.Rotulo
+                </button>
+            }
+        </div>
+    </form>
+
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="alert alert--warn">
+            <Icon Name="alert" Size="16" />
+            <span>@_erro</span>
+        </div>
+    }
+
+    @if (_resultados is not null)
+    {
+        <div class="roller__results" aria-live="polite">
+            @foreach (var resultado in _resultados)
+            {
+                <div class="roller-result">
+                    <div class="roller-result__head">
+                        <span>@(string.IsNullOrWhiteSpace(resultado.Rotulo) ? "Resultado" : resultado.Rotulo)</span>
+                        @if (resultado.Sucesso is bool sucesso)
+                        {
+                            <span class="badge @(sucesso ? "badge--ok" : "badge--fail")">@(sucesso ? "Sucesso" : "Falha")</span>
+                        }
+                    </div>
+                    <div class="roller-result__line">
+                        <span class="roller-result__total">@Numero(resultado.Total)</span>
+                        <span class="roll__arrow">⟵</span>
+                        <DiceDetail Detalhe="@resultado.Detalhe" />
+                        <code class="roll__expr">@resultado.Expressao</code>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <details class="roller__help">
+        <summary>
+            <Icon Name="book" Size="14" />
+            Sintaxe do Rollem V1
+        </summary>
+        <div class="roller__help-body">
+            <p>Use a mesma sintaxe do bot Rollem. Exemplos:</p>
+            <ul>
+                <li><code>4d6</code> quatro dados de seis lados</li>
+                <li><code>d20+5 ataque</code> dado + modificador com rótulo</li>
+                <li><code>4d6dl1</code> descarta o menor</li>
+                <li><code>6#4d6kh3</code> gera seis atributos, mantendo os três maiores</li>
+                <li><code>2d6! dano</code> dados explosivos</li>
+                <li><code>d20&gt;=15</code> teste de sucesso</li>
+                <li><code>[d20+3 espada] [1d8+1 dano]</code> rolagens inline</li>
+            </ul>
+            <p class="muted">Limites: 100 dados por rolagem, 20 repetições.</p>
+        </div>
+    </details>
+</div>
+
+@code {
+    private static readonly (string Rotulo, string Expressao)[] Atalhos =
+    [
+        ("d20", "d20"),
+        ("2d6", "2d6"),
+        ("4d6dl1", "4d6dl1"),
+        ("6#4d6kh3", "6#4d6kh3")
+    ];
+
+    private readonly DiceRoller _roller = new();
+    private string _entrada = "";
+    private IReadOnlyList<RollResult>? _resultados;
+    private string? _erro;
+    private bool _enviando;
+
+    [Parameter] public string Contexto { get; set; } = "Mesa";
+    [Parameter] public string? PersonagemId { get; set; }
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Ex.: 2d6+3 dano";
+    [Parameter] public EventCallback OnRolled { get; set; }
+
+    public void Prefill(string expressao)
+    {
+        _entrada = expressao;
+        _erro = null;
+        StateHasChanged();
+    }
+
+    private async Task RolarAsync()
+    {
+        _erro = null;
+
+        if (string.IsNullOrWhiteSpace(_entrada))
+        {
+            _erro = "Digite uma expressão como d20+5 ou 2d6+3.";
+            return;
+        }
+
+        _enviando = true;
+        try
+        {
+            var resultados = _roller.RollCommand(_entrada);
+            _resultados = resultados;
+
+            try
+            {
+                await Api.SalvarRolagemAsync(
+                    string.IsNullOrWhiteSpace(Contexto) ? "Mesa" : Contexto,
+                    string.IsNullOrWhiteSpace(PersonagemId) ? null : PersonagemId,
+                    resultados);
+
+                await OnRolled.InvokeAsync();
+            }
+            catch (GameApiException ex)
+            {
+                _erro = $"A rolagem foi calculada, mas não foi registrada: {ex.Message}";
+            }
+        }
+        catch (DiceRollException ex)
+        {
+            _erro = ex.Message;
+            _resultados = null;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível rolar: {ex.Message}";
+        }
+        finally
+        {
+            _enviando = false;
+        }
+    }
+
+    private static string Numero(double valor) =>
+        Math.Abs(valor - Math.Round(valor)) < 0.000001
+            ? ((long)Math.Round(valor)).ToString(CultureInfo.InvariantCulture)
+            : valor.ToString("0.##", CultureInfo.InvariantCulture);
+}

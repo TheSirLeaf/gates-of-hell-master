@@ -1,0 +1,228 @@
+@page "/rolagens"
+@inject AuthService Auth
+@inject GameApiClient Api
+@inject GameSyncService Sync
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Rolagens da mesa — Gates of Hell</PageTitle>
+
+<header class="page-head">
+    <div class="page-head__main">
+        <span class="eyebrow">Histórico da mesa</span>
+        <h1>Rolagens</h1>
+        <p class="page-sub">
+            Role como a mesa, por personagem ou por monstro. A sintaxe é a mesma do Rollem V1
+            e cada resultado fica registrado na planilha.
+        </p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--ghost" href="https://rollem.rocks/docs/syntax" target="_blank" rel="noopener noreferrer">
+            <Icon Name="book" Size="16" /> Sintaxe
+        </a>
+        <button type="button" class="btn btn--ghost" @onclick="AtualizarAsync">
+            <Icon Name="refresh" Size="16" /> Atualizar
+        </button>
+    </div>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="alert alert--warn content-alert">
+        <Icon Name="alert" Size="17" />
+        <span>@_erro</span>
+    </div>
+}
+
+<div class="rolls-layout">
+    <div class="rolls-layout__side">
+        <section class="card card--tight">
+            <label class="field">
+                <span>Rolar como</span>
+                <select class="input" @bind="_contextoValor">
+                    <option value="mesa">Mesa — rolagem livre</option>
+                    @if (Personagens.Count > 0)
+                    {
+                        <optgroup label="Personagens">
+                            @foreach (var personagem in Personagens)
+                            {
+                                <option value="@($"ficha:{personagem.Id}")">Ficha: @personagem.Nome</option>
+                            }
+                        </optgroup>
+                    }
+                    @if (Monstros.Count > 0)
+                    {
+                        <optgroup label="Monstros">
+                            @foreach (var monstro in Monstros)
+                            {
+                                <option value="@($"monstro:{monstro.Id}")">Monstro: @monstro.Nome</option>
+                            }
+                        </optgroup>
+                    }
+                </select>
+            </label>
+            <p class="hint">
+                Rolagens de ficha ficam ligadas ao personagem e aparecem na ficha dele.
+                Rolagens de monstro levam o nome da criatura no contexto.
+            </p>
+        </section>
+
+        <DiceRollerPanel Contexto="@Contexto"
+                         PersonagemId="@PersonagemId"
+                         Placeholder="Ex.: [d20+5 ataque] [2d6 dano]"
+                         OnRolled="AtualizarAsync" />
+
+        <section class="card">
+            <div class="eyebrow">Formato</div>
+            <h2 class="section-title">Rollem V1</h2>
+            <p class="hint">
+                Use expressões como <code>4d6</code>, <code>d20+5 ataque</code>,
+                <code>4d6dl1</code>, <code>2d6! dano</code>, <code>6#4d6kh3</code>,
+                <code>d20&gt;=15</code> ou <code>[d20+3 espada] [1d8 dano]</code>.
+            </p>
+        </section>
+    </div>
+
+    <section class="card feed-card">
+        <div class="section-head section-head--tight">
+            <div>
+                <div class="eyebrow">Histórico</div>
+                <h2 class="section-title">A mesa inteira</h2>
+            </div>
+
+            <div class="feed-actions">
+                <span class="section-note">@Rolagens.Count registros</span>
+                @if (_confirmarLimpeza)
+                {
+                    <button type="button" class="btn btn--danger btn--xs" @onclick="LimparAsync">Confirmar limpeza</button>
+                    <button type="button" class="btn btn--ghost btn--xs" @onclick="() => _confirmarLimpeza = false">Não</button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn--ghost btn--xs" @onclick="() => _confirmarLimpeza = true" disabled="@(Rolagens.Count == 0)">
+                        <Icon Name="trash" Size="13" /> Limpar histórico
+                    </button>
+                }
+            </div>
+        </div>
+
+        <RollFeed Entries="Rolagens"
+                  CanDelete="true"
+                  OnDelete="ExcluirRolagemAsync"
+                  EmptyText="Nenhuma rolagem registrada. A mesa está esperando." />
+    </section>
+</div>
+
+@code {
+    private bool _confirmarLimpeza;
+    private string _contextoValor = "mesa";
+    private string? _erro;
+
+    private IReadOnlyList<Personagem> Personagens =>
+        (Sync.State?.Personagens ?? [])
+        .OrderBy(p => p.Nome, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    private IReadOnlyList<Monstro> Monstros =>
+        (Sync.State?.Monstros ?? [])
+        .OrderBy(m => m.Nome, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    private IReadOnlyList<RollEntry> Rolagens => Sync.State?.Rolagens ?? [];
+
+    private Personagem? PersonagemSelecionado =>
+        _contextoValor.StartsWith("ficha:", StringComparison.Ordinal)
+            ? Personagens.FirstOrDefault(p => p.Id == _contextoValor[6..])
+            : null;
+
+    private Monstro? MonstroSelecionado =>
+        _contextoValor.StartsWith("monstro:", StringComparison.Ordinal)
+            ? Monstros.FirstOrDefault(m => m.Id == _contextoValor[8..])
+            : null;
+
+    private string Contexto
+    {
+        get
+        {
+            if (PersonagemSelecionado is { } personagem)
+                return personagem.Nome;
+            if (MonstroSelecionado is { } monstro)
+                return $"Monstro: {monstro.Nome}";
+            return "Mesa";
+        }
+    }
+
+    private string? PersonagemId => PersonagemSelecionado?.Id;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+        if (!Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("login");
+            return;
+        }
+
+        if (!Auth.IsMaster)
+            return;
+
+        Sync.Changed += OnSyncChanged;
+        Sync.Start();
+        await Sync.RefreshAsync();
+    }
+
+    private void OnSyncChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (_contextoValor.StartsWith("ficha:", StringComparison.Ordinal) && PersonagemSelecionado is null)
+                _contextoValor = "mesa";
+            if (_contextoValor.StartsWith("monstro:", StringComparison.Ordinal) && MonstroSelecionado is null)
+                _contextoValor = "mesa";
+
+            StateHasChanged();
+        });
+    }
+
+    private async Task AtualizarAsync() => await Sync.RefreshAsync();
+
+    private async Task ExcluirRolagemAsync(RollEntry entrada)
+    {
+        _erro = null;
+        try
+        {
+            await Api.ExcluirRolagemAsync(entrada.Id);
+            await Sync.RefreshAsync();
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível excluir a rolagem: {ex.Message}";
+        }
+    }
+
+    private async Task LimparAsync()
+    {
+        _erro = null;
+        _confirmarLimpeza = false;
+
+        try
+        {
+            await Api.LimparRolagensAsync();
+            await Sync.RefreshAsync();
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível limpar o histórico: {ex.Message}";
+        }
+    }
+
+    public void Dispose() => Sync.Changed -= OnSyncChanged;
+}

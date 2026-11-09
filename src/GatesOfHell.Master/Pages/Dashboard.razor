@@ -1,0 +1,253 @@
+@page "/"
+@page "/painel"
+@inject AuthService Auth
+@inject GameApiClient Api
+@inject GameSyncService Sync
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Painel do mestre — Gates of Hell</PageTitle>
+
+<header class="page-head">
+    <div class="page-head__main">
+        <span class="eyebrow">Mesa ao vivo</span>
+        <h1>Painel do mestre</h1>
+        <p class="page-sub">
+            Tudo o que a mesa está fazendo, sem recarregar. As fichas atualizam a cada cinco segundos.
+        </p>
+    </div>
+    <div class="page-head__actions">
+        <a class="btn btn--ghost" href="@Link("fichas?novo=true")"><Icon Name="plus" Size="16" /> Nova ficha</a>
+        <a class="btn btn--ghost" href="@Link("monstros")"><Icon Name="skull" Size="16" /> Bestiário</a>
+        <button type="button" class="btn btn--primary" @onclick="AtualizarAsync">
+            <Icon Name="refresh" Size="16" /> Atualizar
+        </button>
+    </div>
+</header>
+
+@if (_carregando)
+{
+    <div class="page-loading">
+        <span class="spinner"></span>
+        <span>Lendo a planilha...</span>
+    </div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(_erro))
+    {
+        <div class="alert alert--warn content-alert">
+            <Icon Name="alert" Size="17" />
+            <span>@_erro</span>
+        </div>
+    }
+
+    <div class="stat-grid">
+        <article class="stat-card">
+            <span class="stat-card__icon"><Icon Name="users" Size="19" /></span>
+            <span class="eyebrow">Jogadores</span>
+            <strong>@Jogadores</strong>
+            <span class="stat-card__hint">contas de jogador</span>
+        </article>
+        <article class="stat-card">
+            <span class="stat-card__icon"><Icon Name="scroll" Size="19" /></span>
+            <span class="eyebrow">Fichas</span>
+            <strong>@Personagens.Count</strong>
+            <span class="stat-card__hint">personagens na mesa</span>
+        </article>
+        <article class="stat-card">
+            <span class="stat-card__icon"><Icon Name="skull" Size="19" /></span>
+            <span class="eyebrow">Monstros</span>
+            <strong>@Monstros.Count</strong>
+            <span class="stat-card__hint">no bestiário</span>
+        </article>
+        <article class="stat-card">
+            <span class="stat-card__icon"><Icon Name="d20" Size="19" /></span>
+            <span class="eyebrow">Rolagens hoje</span>
+            <strong>@RolagensHoje</strong>
+            <span class="stat-card__hint">@Rolagens.Count no histórico recente</span>
+        </article>
+    </div>
+
+    <div class="dash-grid">
+        <section class="dash-live">
+            <div class="section-head">
+                <div>
+                    <div class="eyebrow">Em tempo real</div>
+                    <h2 class="section-title">Fichas da mesa</h2>
+                </div>
+                <LiveBadge IsLive="@Sync.IsRunning" LastSync="@Sync.LastSync" Error="@Sync.Error" />
+            </div>
+
+            @if (Personagens.Count == 0)
+            {
+                <div class="empty">
+                    <Icon Name="users" Size="26" />
+                    <p>Nenhum jogador criou uma ficha ainda. Peça para entrarem pelo app dos jogadores.</p>
+                    <a class="btn btn--primary btn--sm" href="@Link("fichas?novo=true")"><Icon Name="plus" Size="15" /> Criar ficha</a>
+                </div>
+            }
+            else
+            {
+                <div class="live-grid">
+                    @foreach (var personagem in Personagens)
+                    {
+                        <a class="live-card" href="@Link($"fichas/{personagem.Id}")">
+                            <div class="live-card__top">
+                                <span class="avatar">@Inicial(personagem.Nome)</span>
+                                <span class="live-card__who">
+                                    <strong>@personagem.Nome</strong>
+                                    <span>@Dono(personagem.UsuarioId)</span>
+                                </span>
+                                <span class="chip chip--tiny">@(string.IsNullOrWhiteSpace(personagem.Classe) ? "sem classe" : personagem.Classe)</span>
+                            </div>
+
+                            <div class="live-stats">
+                                <div class="live-stat live-stat--hp">
+                                    <span>Vida</span>
+                                    <strong>@personagem.Vida</strong>
+                                </div>
+                                <div class="live-stat">
+                                    <span>Postura</span>
+                                    <strong>@personagem.Postura</strong>
+                                </div>
+                                <div class="live-stat">
+                                    <span>Stamina</span>
+                                    <strong>@personagem.Stamina</strong>
+                                </div>
+                                <div class="live-stat">
+                                    <span>Resist.</span>
+                                    <strong>@personagem.Resistencia</strong>
+                                </div>
+                            </div>
+
+                            <div class="live-card__attrs">
+                                <span>Fís <strong>@personagem.Fisico</strong></span>
+                                <span>Men <strong>@personagem.Mental</strong></span>
+                                <span>Esp <strong>@personagem.Espiritual</strong></span>
+                                <span class="live-card__race">@(string.IsNullOrWhiteSpace(personagem.Raca) ? "—" : personagem.Raca)</span>
+                            </div>
+
+                            <div class="live-card__foot">
+                                <span>@personagem.PericiasComPontos/@personagem.LimitePericias perícias</span>
+                                <span>@Tempo(personagem.AtualizadoEm)</span>
+                            </div>
+                        </a>
+                    }
+                </div>
+            }
+        </section>
+
+        <aside class="dash-side">
+            <DiceRollerPanel Contexto="Mesa"
+                             Placeholder="Ex.: [d20+5 ataque] [2d6 dano]"
+                             OnRolled="AtualizarAsync" />
+
+            <section class="card">
+                <div class="section-head section-head--tight">
+                    <div>
+                        <div class="eyebrow">Agora</div>
+                        <h2 class="section-title">Rolagens recentes</h2>
+                    </div>
+                    <a class="text-button" href="@Link("rolagens")">ver todas</a>
+                </div>
+
+                <RollFeed Entries="Rolagens"
+                          Compact="true"
+                          Limit="8"
+                          CanDelete="true"
+                          OnDelete="ExcluirRolagemAsync"
+                          EmptyText="A mesa está silenciosa. Role alguma coisa." />
+            </section>
+        </aside>
+    </div>
+}
+
+@code {
+    private bool _carregando = true;
+    private string? _erro;
+
+    private IReadOnlyList<Personagem> Personagens =>
+        (Sync.State?.Personagens ?? [])
+        .OrderBy(p => p.Nome, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    private IReadOnlyList<Monstro> Monstros => Sync.State?.Monstros ?? [];
+    private IReadOnlyList<RollEntry> Rolagens => Sync.State?.Rolagens ?? [];
+
+    private string Link(string caminho) => Nav.BaseUri + caminho.TrimStart('/');
+    private IReadOnlyList<Usuario> Usuarios => Sync.State?.Usuarios ?? [];
+
+    private int Jogadores => Usuarios.Count(u => u.Papel == "jogador");
+
+    private int RolagensHoje => Rolagens.Count(r =>
+    {
+        if (!DateTimeOffset.TryParse(r.CriadoEm, out var quando))
+            return false;
+        return quando.ToLocalTime().Date == DateTimeOffset.Now.Date;
+    });
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+        if (!Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("login");
+            return;
+        }
+
+        if (!Auth.IsMaster)
+            return;
+
+        Sync.Changed += OnSyncChanged;
+        Sync.Start();
+        await Sync.RefreshAsync();
+        _carregando = false;
+    }
+
+    private void OnSyncChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task AtualizarAsync() => await Sync.RefreshAsync();
+
+    private async Task ExcluirRolagemAsync(RollEntry entrada)
+    {
+        _erro = null;
+        try
+        {
+            await Api.ExcluirRolagemAsync(entrada.Id);
+            await Sync.RefreshAsync();
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível excluir a rolagem: {ex.Message}";
+        }
+    }
+
+    private string Dono(string usuarioId) =>
+        Usuarios.FirstOrDefault(u => u.Id == usuarioId)?.Nome ?? "Jogador";
+
+    private static string Inicial(string? nome) =>
+        string.IsNullOrWhiteSpace(nome) ? "?" : nome.Trim()[..1].ToUpperInvariant();
+
+    private static string Tempo(string? iso)
+    {
+        if (string.IsNullOrWhiteSpace(iso) || !DateTimeOffset.TryParse(iso, out var quando))
+            return "—";
+
+        var diferenca = DateTimeOffset.Now - quando.ToLocalTime();
+        if (diferenca.TotalSeconds < 45)
+            return "agora";
+        if (diferenca.TotalMinutes < 60)
+            return $"há {(int)Math.Max(1, diferenca.TotalMinutes)} min";
+        if (quando.ToLocalTime().Date == DateTimeOffset.Now.Date)
+            return quando.ToLocalTime().ToString("HH:mm");
+
+        return quando.ToLocalTime().ToString("dd/MM HH:mm");
+    }
+
+    public void Dispose() => Sync.Changed -= OnSyncChanged;
+}
