@@ -1,0 +1,309 @@
+@page "/classes"
+@inject AuthService Auth
+@inject GameApiClient Api
+@inject GameSyncService Sync
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Classes — Gates of Hell</PageTitle>
+
+<header class="page-head">
+    <div class="page-head__main">
+        <span class="eyebrow">Regras da mesa</span>
+        <h1>Classes</h1>
+        <p class="page-sub">
+            Cada classe concede três perícias ao personagem. As classes cadastradas aqui
+            aparecem na ficha dos jogadores e no editor do mestre.
+        </p>
+    </div>
+    <div class="page-head__actions">
+        <button type="button" class="btn btn--primary" @onclick="NovaClasse">
+            <Icon Name="plus" Size="16" /> Nova classe
+        </button>
+    </div>
+</header>
+
+@if (!string.IsNullOrWhiteSpace(_erro))
+{
+    <div class="alert alert--warn content-alert">
+        <Icon Name="alert" Size="17" />
+        <span>@_erro</span>
+    </div>
+}
+
+<div class="monster-layout">
+    <aside class="monster-list card">
+        <div class="section-head section-head--tight">
+            <div>
+                <div class="eyebrow">Cadastradas</div>
+                <h2 class="section-title">@ListaClasses.Count</h2>
+            </div>
+        </div>
+
+        @if (ListaClasses.Count == 0)
+        {
+            <div class="empty empty--small">
+                <Icon Name="users" Size="24" />
+                <p>Nenhuma classe cadastrada. Crie a primeira para liberar a escolha nas fichas.</p>
+            </div>
+        }
+        else
+        {
+            <div class="monster-list__items">
+                @foreach (var classe in ListaClasses)
+                {
+                    <button type="button" class="monster-card @(classe.Id == _draft?.Id ? "monster-card--active" : "")"
+                            @onclick="() => Selecionar(classe)">
+                        <span class="monster-card__top">
+                            <span class="monster-card__icon"><Icon Name="users" Size="17" /></span>
+                            <strong>@classe.Nome</strong>
+                        </span>
+                        <span class="monster-card__stats">
+                            @string.Join(" · ", classe.Pericias.Select(Pericias.NomeDaChave))
+                        </span>
+                    </button>
+                }
+            </div>
+        }
+    </aside>
+
+    <div class="monster-main">
+        @if (_draft is not { } classeEditada)
+        {
+            <div class="empty empty--large">
+                <Icon Name="users" Size="28" />
+                <p>Selecione uma classe ou crie uma nova para a mesa.</p>
+                <button type="button" class="btn btn--primary btn--sm" @onclick="NovaClasse">
+                    <Icon Name="plus" Size="15" /> Criar classe
+                </button>
+            </div>
+        }
+        else
+        {
+            <section class="card monster-form-card">
+                <div class="section-head">
+                    <div>
+                        <div class="eyebrow">@(_novo ? "Nova classe" : "Classe da mesa")</div>
+                        <h2 class="section-title">@(string.IsNullOrWhiteSpace(classeEditada.Nome) ? "Sem nome" : classeEditada.Nome)</h2>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <label class="field field--wide">
+                        <span>Nome da classe</span>
+                        <input class="input" @bind="_draft.Nome" maxlength="60" placeholder="Ex.: Caçador" />
+                    </label>
+                </div>
+
+                <div class="form-grid form-grid--3" style="margin-top:14px">
+                    <label class="field">
+                        <span>Perícia 1</span>
+                        <select class="input" @bind="_draft.Pericia1">
+                            <option value="">Escolha uma perícia</option>
+                            @foreach (var pericia in Pericias.Todas)
+                            {
+                                <option value="@pericia.Chave">@pericia.Nome · @pericia.Grupo</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Perícia 2</span>
+                        <select class="input" @bind="_draft.Pericia2">
+                            <option value="">Escolha uma perícia</option>
+                            @foreach (var pericia in Pericias.Todas)
+                            {
+                                <option value="@pericia.Chave">@pericia.Nome · @pericia.Grupo</option>
+                            }
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span>Perícia 3</span>
+                        <select class="input" @bind="_draft.Pericia3">
+                            <option value="">Escolha uma perícia</option>
+                            @foreach (var pericia in Pericias.Todas)
+                            {
+                                <option value="@pericia.Chave">@pericia.Nome · @pericia.Grupo</option>
+                            }
+                        </select>
+                    </label>
+                </div>
+
+                <p class="hint">
+                    As três perícias precisam ser diferentes. Elas são marcadas na ficha
+                    e entram no orçamento como os três slots da classe.
+                </p>
+
+                @if (!string.IsNullOrWhiteSpace(_mensagem))
+                {
+                    <span class="save-state" style="margin-top:12px"><Icon Name="check" Size="14" /> @_mensagem</span>
+                }
+
+                <div class="form-actions form-actions--split">
+                    @if (!_novo)
+                    {
+                        @if (_confirmarExclusao)
+                        {
+                            <span class="delete-confirm">
+                                <button type="button" class="btn btn--danger btn--sm" @onclick="ExcluirAsync">Confirmar exclusão</button>
+                                <button type="button" class="btn btn--ghost btn--sm" @onclick="() => _confirmarExclusao = false">Não</button>
+                            </span>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn--ghost btn--sm" @onclick="() => _confirmarExclusao = true">
+                                <Icon Name="trash" Size="14" /> Excluir
+                            </button>
+                        }
+                    }
+                    <span class="form-actions__spacer"></span>
+                    <button type="button" class="btn btn--ghost" @onclick="NovaClasse">Nova</button>
+                    <button type="button" class="btn btn--primary" @onclick="SalvarAsync" disabled="@_salvando">
+                        @if (_salvando)
+                        {
+                            <span class="spinner spinner--sm"></span>
+                        }
+                        else
+                        {
+                            <Icon Name="save" Size="15" />
+                        }
+                        Salvar classe
+                    </button>
+                </div>
+            </section>
+        }
+    </div>
+</div>
+
+@code {
+    private Classe? _draft;
+    private bool _novo;
+    private bool _salvando;
+    private bool _confirmarExclusao;
+    private string? _mensagem;
+    private string? _erro;
+
+    private IReadOnlyList<Classe> ListaClasses =>
+        (Sync.State?.Classes ?? [])
+        .OrderBy(c => c.Nome, StringComparer.CurrentCultureIgnoreCase)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Auth.InitializeAsync();
+        if (!Auth.IsAuthenticated)
+        {
+            Nav.NavigateTo("login");
+            return;
+        }
+
+        if (!Auth.IsMaster)
+            return;
+
+        Sync.Changed += OnSyncChanged;
+        Sync.Start();
+        await Sync.RefreshAsync();
+
+        if (ListaClasses.Count > 0)
+            Selecionar(ListaClasses[0]);
+    }
+
+    private void OnSyncChanged()
+    {
+        _ = InvokeAsync(() =>
+        {
+            if (_draft is null && ListaClasses.Count > 0 && !_novo)
+                Selecionar(ListaClasses[0]);
+            StateHasChanged();
+        });
+    }
+
+    private void Selecionar(Classe classe)
+    {
+        _draft = classe.Clone();
+        _novo = false;
+        _mensagem = null;
+        _erro = null;
+        _confirmarExclusao = false;
+    }
+
+    private void NovaClasse()
+    {
+        _draft = new Classe();
+        _novo = true;
+        _mensagem = null;
+        _erro = null;
+        _confirmarExclusao = false;
+    }
+
+    private async Task SalvarAsync()
+    {
+        if (_draft is null)
+            return;
+
+        _erro = null;
+        _mensagem = null;
+
+        if (string.IsNullOrWhiteSpace(_draft.Nome))
+        {
+            _erro = "Dê um nome à classe.";
+            return;
+        }
+
+        var pericias = _draft.Pericias;
+        if (pericias.Count != 3 || pericias.Distinct(StringComparer.OrdinalIgnoreCase).Count() != 3)
+        {
+            _erro = "Escolha três perícias diferentes.";
+            return;
+        }
+
+        _salvando = true;
+        try
+        {
+            var salva = await Api.SalvarClasseAsync(_draft);
+            _draft = salva.Clone();
+            _novo = false;
+            _mensagem = $"Salvo às {DateTime.Now:HH:mm}";
+            await Sync.RefreshAsync();
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível salvar a classe: {ex.Message}";
+        }
+        finally
+        {
+            _salvando = false;
+        }
+    }
+
+    private async Task ExcluirAsync()
+    {
+        if (_draft is null || _novo)
+            return;
+
+        _erro = null;
+        try
+        {
+            await Api.ExcluirClasseAsync(_draft.Id);
+            await Sync.RefreshAsync();
+            _draft = null;
+            _confirmarExclusao = false;
+
+            if (ListaClasses.Count > 0)
+                Selecionar(ListaClasses[0]);
+        }
+        catch (GameApiException ex)
+        {
+            _erro = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _erro = $"Não foi possível excluir a classe: {ex.Message}";
+        }
+    }
+
+    public void Dispose() => Sync.Changed -= OnSyncChanged;
+}

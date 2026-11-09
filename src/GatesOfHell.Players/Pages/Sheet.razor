@@ -102,7 +102,7 @@ else
                 <SheetEditor Personagem="ficha"
                              Config="Configuracao"
                              Itens="ItensDaFicha"
-                             OnRollStatus="RolarStatusAsync"
+                             Classes="Classes"
                              OnRollSkill="RolarPericiaAsync" />
 
                 <InventoryPanel PersonagemId="@ficha.Id"
@@ -217,6 +217,8 @@ else
         .ToList();
 
     private Config Configuracao => Sync.State?.Config ?? new Config();
+
+    private IReadOnlyList<Classe> Classes => Sync.State?.Classes ?? [];
 
     private IReadOnlyList<ItemInventario> ItensDaFicha =>
         (Sync.State?.Itens ?? [])
@@ -344,51 +346,6 @@ else
         finally
         {
             _salvando = false;
-        }
-    }
-
-    private async Task RolarStatusAsync(StatusRollRequest pedido)
-    {
-        if (_draft is null)
-            return;
-
-        _erro = null;
-        _aviso = null;
-        _mensagem = null;
-
-        try
-        {
-            var resultados = _roller.RollCommand($"{pedido.Expressao} {pedido.Rotulo}");
-            var resultado = resultados[0];
-            var total = (int)Math.Round(resultado.Total);
-
-            switch (pedido.Status)
-            {
-                case StatusKind.Vida:
-                    _draft.Vida = total;
-                    break;
-                case StatusKind.Postura:
-                    _draft.Postura = total;
-                    break;
-                case StatusKind.Stamina:
-                    _draft.Stamina = total;
-                    break;
-            }
-
-            try
-            {
-                await Api.SalvarRolagemAsync(_draft.Nome, _draft.Id, resultados);
-            }
-            catch (GameApiException ex)
-            {
-                _aviso = $"O status foi atualizado, mas a rolagem não foi registrada: {ex.Message}";
-            }
-
-            await SalvarAsync();
-        }
-        catch (DiceRollException ex)
-        {
-            _erro = ex.Message;
         }
     }
 

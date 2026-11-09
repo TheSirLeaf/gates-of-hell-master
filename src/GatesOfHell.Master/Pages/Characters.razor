@@ -13,7 +13,7 @@
         <span class="eyebrow">Mesa ao vivo</span>
         <h1>Fichas da mesa</h1>
         <p class="page-sub">
-            A ficha selecionada se atualiza sozinha. Clique em editar para mudar status,
+            A ficha selecionada se atualiza sozinha. Clique em editar para mudar recursos,
             atributos, perícias e inventário de qualquer jogador.
         </p>
     </div>
@@ -153,9 +153,9 @@
                     <SheetEditor Personagem="ficha"
                                  Config="Configuracao"
                                  Itens="ItensDaFicha"
+                                 Classes="Classes"
                                  ReadOnly="!Edicao"
                                  MostrarBotoesRolagem="Edicao"
-                                 OnRollStatus="RolarStatusAsync"
                                  OnRollSkill="RolarPericiaAsync" />
 
                     <InventoryPanel PersonagemId="@ficha.Id"
@@ -316,6 +316,8 @@
 
     private Config Configuracao => Sync.State?.Config ?? new Config();
 
+    private IReadOnlyList<Classe> Classes => Sync.State?.Classes ?? [];
+
     private IReadOnlyList<ItemInventario> ItensDaFicha =>
         (Sync.State?.Itens ?? [])
         .Where(i => i.PersonagemId == Exibida?.Id)
@@ -429,52 +431,6 @@
         finally
         {
             _salvando = false;
-        }
-    }
-
-    private async Task RolarStatusAsync(StatusRollRequest pedido)
-    {
-        if (_draft is null)
-            return;
-
-        _erro = null;
-        _mensagem = null;
-
-        try
-        {
-            var resultados = _rollerEngine.RollCommand($"{pedido.Expressao} {pedido.Rotulo}");
-            var total = (int)Math.Round(resultados[0].Total);
-
-            switch (pedido.Status)
-            {
-                case StatusKind.Vida:
-                    _draft.Vida = total;
-                    break;
-                case StatusKind.Postura:
-                    _draft.Postura = total;
-                    break;
-                case StatusKind.Stamina:
-                    _draft.Stamina = total;
-                    break;
-            }
-
-            await Api.SalvarRolagemAsync(_draft.Nome, _draft.Id, resultados);
-            var salvo = await Api.SalvarPersonagemAsync(_draft);
-            _draft = salvo.Clone();
-            _mensagem = $"{pedido.Status} rolado e salvo";
-            await Sync.RefreshAsync();
-        }
-        catch (DiceRollException ex)
-        {
-            _erro = ex.Message;
-        }
-        catch (GameApiException ex)
-        {
-            _erro = ex.Message;
-        }
-        catch (Exception ex)
-        {
-            _erro = $"Não foi possível rolar: {ex.Message}";
         }
     }
 

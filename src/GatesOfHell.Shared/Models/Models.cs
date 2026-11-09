@@ -101,9 +101,17 @@ public sealed class Personagem
         }
     }
 
+    [JsonIgnore]
+    public IReadOnlyList<string> PericiasDaClasse =>
+        PericiaClasse
+            .Split(['|', ',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToList();
+
     public int PericiasComPontos => Pericias.Todas.Count(p => GetPericia(p.Chave) > 0);
 
-    public int LimitePericias => Math.Max(0, Mental) + 1;
+    public int LimitePericias => Math.Max(0, Mental) + PericiasDaClasse.Count;
 
     public Personagem Clone() => (Personagem)MemberwiseClone();
 }
@@ -142,6 +150,9 @@ public static class Pericias
 
     public static IEnumerable<PericiaDef> DoGrupo(string grupo) =>
         Todas.Where(p => p.Grupo == grupo);
+
+    public static string NomeDaChave(string chave) =>
+        Todas.FirstOrDefault(p => p.Chave == chave)?.Nome ?? chave;
 }
 
 public static class Testes
@@ -200,6 +211,24 @@ public sealed class ItemInventario
     public string AtualizadoEm { get; set; } = "";
 }
 
+public sealed class Classe
+{
+    public string Id { get; set; } = "";
+    public string Nome { get; set; } = "";
+    public string Pericia1 { get; set; } = "";
+    public string Pericia2 { get; set; } = "";
+    public string Pericia3 { get; set; } = "";
+    public string CriadoEm { get; set; } = "";
+    public string AtualizadoEm { get; set; } = "";
+
+    public IReadOnlyList<string> Pericias =>
+        new[] { Pericia1, Pericia2, Pericia3 }
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .ToList();
+
+    public Classe Clone() => (Classe)MemberwiseClone();
+}
+
 public sealed class Monstro
 {
     public string Id { get; set; } = "";
@@ -245,6 +274,7 @@ public sealed class GameState
 {
     public List<Personagem> Personagens { get; set; } = [];
     public List<ItemInventario> Itens { get; set; } = [];
+    public List<Classe> Classes { get; set; } = [];
     public List<Monstro> Monstros { get; set; } = [];
     public List<RollEntry> Rolagens { get; set; } = [];
     public List<Usuario> Usuarios { get; set; } = [];
@@ -264,15 +294,5 @@ public sealed class ApiEnvelope<T>
     public T? Data { get; set; }
     public string? Error { get; set; }
 }
-
-public enum StatusKind
-{
-    Vida,
-    Postura,
-    Stamina,
-    Resistencia
-}
-
-public sealed record StatusRollRequest(StatusKind Status, string Expressao, string Rotulo);
 
 public sealed record SkillRollRequest(string Chave, string Nome, string Atributo, string Expressao);

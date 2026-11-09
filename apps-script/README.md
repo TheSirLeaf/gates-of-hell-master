@@ -7,8 +7,8 @@ planilha Google e expõe uma API JSON usada pelos dois apps Blazor.
 
 - Cria a planilha **Gates of Hell — Fichas** (ou reaproveita a que já estiver
   registrada nas propriedades do script).
-- Cria as abas `Config`, `Usuarios`, `Sessoes`, `Personagens`, `Itens`, `Monstros`
-  e `Rolagens`.
+- Cria as abas `Config`, `Usuarios`, `Sessoes`, `Personagens`, `Itens`, `Classes`,
+  `Monstros` e `Rolagens`.
 - Escreve os cabeçalhos, congela a primeira linha, aplica o tema escuro/dourado e
   define larguras de coluna.
 - Grava `nomeCampanha = Gates of Hell` na aba `Config`.
@@ -65,6 +65,7 @@ versão:
 | `Sessoes` | hash do token, usuário, criado em, expira em (30 dias) |
 | `Personagens` | ficha completa, dono e timestamps |
 | `Itens` | itens, equipamentos e habilidades por ficha |
+| `Classes` | nome e três perícias de cada classe da mesa |
 | `Monstros` | bestiário do mestre |
 | `Rolagens` | uma linha por resultado, histórico compartilhado |
 
@@ -84,13 +85,14 @@ A resposta é sempre um envelope:
 ```
 
 Ações: `ping`, `login`, `register`, `me`, `logout`, `sync`, `createCharacter`,
-`saveCharacter`, `deleteCharacter`, `saveItem`, `deleteItem`, `saveMonster`,
-`deleteMonster`, `saveRoll`, `deleteRoll`, `clearRolls`, `saveConfig`.
+`saveCharacter`, `deleteCharacter`, `saveItem`, `deleteItem`, `saveClass`,
+`deleteClass`, `saveMonster`, `deleteMonster`, `saveRoll`, `deleteRoll`,
+`clearRolls`, `saveConfig`.
 
 Ações autenticadas enviam `token`. O servidor valida o dono da ficha, o papel de
 mestre e a sessão em cada chamada. `sync` devolve ao jogador apenas as fichas e itens
-dele, as rolagens compartilhadas e a configuração; o mestre recebe também monstros,
-todas as fichas e a lista pública de usuários (sem hash nem salt).
+dele, as classes, as rolagens compartilhadas e a configuração; o mestre recebe também
+monstros, todas as fichas e a lista pública de usuários (sem hash nem salt).
 
 `ping` pode ser chamado antes do `setup()` e informa se a planilha já foi configurada.
 Abrir a URL `/exec` no navegador mostra uma página de status; `?action=ping` devolve

@@ -73,6 +73,12 @@ public sealed class GameApiClient
     public Task<JsonElement> ExcluirItemAsync(string id, CancellationToken ct = default) =>
         SendAsync<JsonElement>(_settings.ApiUrl, "deleteItem", new { id }, true, ct);
 
+    public Task<Classe> SalvarClasseAsync(Classe classe, CancellationToken ct = default) =>
+        SendAsync<Classe>(_settings.ApiUrl, "saveClass", new { classe }, true, ct);
+
+    public Task<JsonElement> ExcluirClasseAsync(string id, CancellationToken ct = default) =>
+        SendAsync<JsonElement>(_settings.ApiUrl, "deleteClass", new { id }, true, ct);
+
     public Task<Monstro> SalvarMonstroAsync(Monstro monstro, CancellationToken ct = default) =>
         SendAsync<Monstro>(_settings.ApiUrl, "saveMonster", new { monstro }, true, ct);
 

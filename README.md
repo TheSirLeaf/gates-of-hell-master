@@ -3,10 +3,11 @@
 Fichas de RPG para a mesa, com dois apps Blazor WebAssembly e um backend em Google Sheets
 via Google Apps Script.
 
-- **Jogadores** — criam a conta, montam a ficha, rolam os status, consultam itens,
-  equipamentos e habilidades e usam o rolador com a sintaxe do bot **Rollem** do Discord.
+- **Jogadores** — criam a conta, montam a ficha, administram recursos, rolam perícias,
+  consultam itens, equipamentos e habilidades e usam o rolador com a sintaxe do bot
+  **Rollem** do Discord.
 - **Mestre** — vê as fichas ao vivo, edita qualquer ficha, administra o inventário,
-  mantém o bestiário e o histórico de rolagens e configura a campanha.
+  cadastra classes, mantém o bestiário e o histórico de rolagens e configura a campanha.
 - **Backend** — um único Web App do Apps Script grava tudo em uma planilha privada
   na sua conta Google. O navegador nunca acessa a planilha diretamente.
 
@@ -43,7 +44,7 @@ O guia detalhado está em **[apps-script/README.md](apps-script/README.md)**. Re
 4. **Troque `MESTRE_CODE`** no topo de `Code.gs` por um código secreto da sua mesa.
 5. Execute `setup()` uma vez e autorize. Ele cria a planilha
    **Gates of Hell — Fichas** com as abas `Config`, `Usuarios`, `Sessoes`,
-   `Personagens`, `Itens`, `Monstros` e `Rolagens`.
+   `Personagens`, `Itens`, `Classes`, `Monstros` e `Rolagens`.
 6. **Implantar → Nova implantação → Aplicativo da Web**:
    - Executar como: **Eu**
    - Quem tem acesso: **Qualquer pessoa**
@@ -111,18 +112,17 @@ O motor fica em `src/GatesOfHell.Shared/Dice/DiceRoller.cs` e roda no navegador;
 Os limites de segurança do motor são 100 dados por pool, 1.000 lados, 20 repetições e
 50 resultados por envio.
 
-## Status da ficha
+## Recursos e testes da ficha
 
 - **Teste de atributo** = `Nd20kh1`, em que `N` é o valor do atributo, com no mínimo 1d20.
-- **Vida** = teste de Físico + valor da classe.
-- **Postura** = teste de Físico.
-- **Stamina** = teste de Espiritual + valor da classe.
-- **Resistência** = valor da armadura escolhida.
+- **Vida**, **Postura** e **Stamina** são recursos ajustados manualmente; não são rolados.
+- **Resistência** é o valor da armadura escolhida.
 
 Cada perícia soma o valor dela ao teste do atributo do seu grupo: Luta com Físico 3
 e Luta 2 rola `3d20kh1+2`; Percepção com Mental 2 e Percepção 1 rola `2d20kh1+1`.
-As 15 perícias ficam nos grupos Físicas, Mentais e Espirituais, com orçamento de uma
-perícia por ponto em Mental, mais a perícia de classe.
+As 15 perícias ficam nos grupos Físicas, Mentais e Espirituais. O mestre cadastra
+classes com três perícias; a classe escolhida marca essas três e concede três slots
+no orçamento, além de um slot por ponto em Mental.
 
 ## Itens, equipamentos e habilidades
 
@@ -136,8 +136,8 @@ O bestiário e o histórico de rolagens também são administrados pelo mestre.
   para uma mesa entre amigos, não um sistema de identidade para a internet aberta.
 - Sessões duram 30 dias e são guardadas na planilha apenas como hash.
 - O Web App roda como o dono da planilha. As permissões são validadas no servidor:
-  jogador só altera as próprias fichas; itens, monstros, configurações e exclusão de
-  rolagens são exclusivos do mestre.
+  jogador só altera as próprias fichas; itens, classes, monstros, configurações e
+  exclusão de rolagens são exclusivos do mestre.
 - O Apps Script tem cotas diárias de execução. O polling de 5 s é adequado para mesas
   pequenas; para muitas pessoas, aumente `GameSyncService.Intervalo`.
 - Faça backup copiando a planilha ou usando o histórico de versões do Google Sheets.

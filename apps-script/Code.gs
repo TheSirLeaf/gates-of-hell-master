@@ -25,6 +25,7 @@ const ABAS = {
   SESSOES: 'Sessoes',
   PERSONAGENS: 'Personagens',
   ITENS: 'Itens',
+  CLASSES: 'Classes',
   MONSTROS: 'Monstros',
   ROLAGENS: 'Rolagens'
 };
@@ -45,6 +46,9 @@ const CABECALHOS = {
     'id', 'personagemId', 'tipo', 'nome', 'descricao', 'valor', 'quantidade',
     'equipado', 'criadoEm', 'atualizadoEm'
   ],
+  Classes: [
+    'id', 'nome', 'pericia1', 'pericia2', 'pericia3', 'criadoEm', 'atualizadoEm'
+  ],
   Monstros: [
     'id', 'nome', 'vida', 'vidaMax', 'postura', 'stamina', 'resistencia',
     'fisico', 'mental', 'espiritual', 'notas', 'criadoEm', 'atualizadoEm'
@@ -56,6 +60,11 @@ const CABECALHOS = {
 };
 
 const TIPOS_ITEM = ['Item', 'Equipamento', 'Habilidade'];
+const PERICIAS_VALIDAS = [
+  'luta', 'iniciativa', 'esquiva', 'fortitude', 'atletismo',
+  'percepcao', 'historia', 'linguagem', 'pontaria', 'alquimia',
+  'vontade', 'furtividade', 'instinto', 'intimidacao', 'enganacao'
+];
 
 /* ------------------------------------------------------------------ */
 /* Entrada                                                            */
@@ -130,6 +139,10 @@ function despachar_(acao, corpo) {
       return salvarMonstro_(corpo);
     case 'deleteMonster':
       return excluirMonstro_(corpo);
+    case 'saveClass':
+      return salvarClasse_(corpo);
+    case 'deleteClass':
+      return excluirClasse_(corpo);
     case 'saveRoll':
       return salvarRolagem_(corpo);
     case 'deleteRoll':
@@ -509,10 +522,12 @@ function sincronizar_(corpo) {
 
   const monstros = mestre ? lerTabela_(ABAS.MONSTROS).map(monstroSaida_) : [];
   const usuarios = mestre ? lerTabela_(ABAS.USUARIOS).map(usuarioSaida_) : [];
+  const classes = lerTabela_(ABAS.CLASSES).map(classeSaida_);
 
   return {
     personagens: personagens,
     itens: itens,
+    classes: classes,
     monstros: monstros,
     rolagens: rolagens,
     usuarios: usuarios,
@@ -737,6 +752,79 @@ function excluirItem_(corpo) {
     const indice = itens.findIndex(function (i) { return texto_(i.id) === id; });
     if (indice < 0) throw new ErroApi('Item não encontrado.');
     aba_(ABAS.ITENS).deleteRow(indice + 2);
+    return { ok: true, id: id };
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Classes                                                            */
+/* ------------------------------------------------------------------ */
+
+function salvarClasse_(corpo) {
+  exigirMestre_(corpo);
+  const dados = corpo.classe;
+  if (!dados || typeof dados !== 'object') throw new ErroApi('Classe inválida.');
+
+  const nome = limitarTexto_(dados.nome, 60);
+  if (!nome) throw new ErroApi('Dê um nome à classe.');
+
+  const pericias = [dados.pericia1, dados.pericia2, dados.pericia3].map(function (p) {
+    return texto_(p);
+  });
+
+  if (pericias.some(function (p) { return PERICIAS_VALIDAS.indexOf(p) < 0; })) {
+    throw new ErroApi('Escolha três perícias válidas para a classe.');
+  }
+  if (new Set(pericias).size !== 3) {
+    throw new ErroApi('As três perícias da classe precisam ser diferentes.');
+  }
+
+  return comLock_(function () {
+    const classes = lerTabela_(ABAS.CLASSES);
+    const id = texto_(dados.id);
+    const indice = id
+      ? classes.findIndex(function (c) { return texto_(c.id) === id; })
+      : -1;
+
+    const atual = indice >= 0 ? classeSaida_(classes[indice]) : null;
+    if (id && !atual) throw new ErroApi('Classe não encontrada.');
+
+    const repetida = classes.some(function (c, i) {
+      return i !== indice && normalizarLogin_(c.nome) === normalizarLogin_(nome);
+    });
+    if (repetida) throw new ErroApi('Já existe uma classe com esse nome.');
+
+    const agora = agora_();
+    const salvo = {
+      id: atual ? atual.id : Utilities.getUuid(),
+      nome: nome,
+      pericia1: pericias[0],
+      pericia2: pericias[1],
+      pericia3: pericias[2],
+      criadoEm: atual ? atual.criadoEm : agora,
+      atualizadoEm: agora
+    };
+
+    if (indice >= 0) {
+      escreverLinha_(ABAS.CLASSES, indice, salvo);
+    } else {
+      adicionarLinhas_(ABAS.CLASSES, [salvo]);
+    }
+
+    return classeSaida_(salvo);
+  });
+}
+
+function excluirClasse_(corpo) {
+  exigirMestre_(corpo);
+  const id = texto_(corpo.id);
+  if (!id) throw new ErroApi('Classe sem identificador.');
+
+  return comLock_(function () {
+    const classes = lerTabela_(ABAS.CLASSES);
+    const indice = classes.findIndex(function (c) { return texto_(c.id) === id; });
+    if (indice < 0) throw new ErroApi('Classe não encontrada.');
+    aba_(ABAS.CLASSES).deleteRow(indice + 2);
     return { ok: true, id: id };
   });
 }
@@ -1072,6 +1160,18 @@ function itemSaida_(o) {
     valor: numero_(o.valor, 0),
     quantidade: numero_(o.quantidade, 1),
     equipado: valorBooleano_(o.equipado),
+    criadoEm: texto_(o.criadoEm),
+    atualizadoEm: texto_(o.atualizadoEm)
+  };
+}
+
+function classeSaida_(o) {
+  return {
+    id: texto_(o.id),
+    nome: texto_(o.nome),
+    pericia1: texto_(o.pericia1),
+    pericia2: texto_(o.pericia2),
+    pericia3: texto_(o.pericia3),
     criadoEm: texto_(o.criadoEm),
     atualizadoEm: texto_(o.atualizadoEm)
   };
